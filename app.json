@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "Field Asset Management",
+    "slug": "field-service",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "field",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.field.assetmanagement"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.field.assetmanagement"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single",
+      "display": "standalone"
+    },
+    "extra": {
+      "supabaseUrl": "https://xlqljnrvgvsznjbulucw.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhscWxqbnJ2Z3Zzem5qYnVsdWN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzA0MTUzMDIsImV4cCI6MjA0NTk5MTMwMn0.V9mhv_qIZUnb0o4Kkrnumg_R-j5XI2WQVUXVfj2YMw0",
+      "powersyncUrl": "https://6918f9a1af0dc7f759728c53.powersync.journeyapps.com",
+      "router": {},
+      "eas": {
+        "projectId": "67a109af-5257-4fa4-924d-1dada4342ada"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera",
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone",
+          "recordAudioAndroid": true
+        }
+      ]
+    ],
+    "owner": "kaman1990"
+  }
+}
