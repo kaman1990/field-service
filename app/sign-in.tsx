@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -21,89 +20,121 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [feedback, setFeedback] = useState<{
+    type: 'success' | 'error' | 'info';
+    message: string;
+  } | null>(null);
+
+  const setFeedbackMessage = (
+    type: 'success' | 'error' | 'info',
+    message: string
+  ) => {
+    setFeedback({ type, message });
+  };
+
+  const clearFeedback = () => setFeedback(null);
 
   const handleSignIn = async () => {
+    if (loading) {
+      return;
+    }
+
+    clearFeedback();
+
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password');
+      setFeedbackMessage('error', 'Please enter both email and password');
       return;
     }
 
     setLoading(true);
     try {
-      console.log('[Auth] Attempting to sign in...', { email });
-      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
-        console.error('[Auth] Sign in error:', error);
-        Alert.alert('Sign In Failed', error.message);
+        setFeedbackMessage('error', error.message);
         setLoading(false);
         return;
       }
 
       if (data.session) {
-        console.log('[Auth] ✅ Sign in successful', { userId: data.user.id });
-        
         try {
           await connectPowerSync();
-          console.log('[Auth] PowerSync connection triggered');
         } catch (psError) {
-          console.error('[Auth] PowerSync connection error:', psError);
+          // PowerSync connection failed, but continue with sign in
         }
         
+        setFeedbackMessage('success', 'Welcome back! Redirecting you now...');
         router.replace('/(tabs)');
       }
     } catch (error: any) {
-      console.error('[Auth] Unexpected error:', error);
-      Alert.alert('Error', error.message || 'An unexpected error occurred');
+      setFeedbackMessage(
+        'error',
+        error.message || 'An unexpected error occurred'
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const handleSignUp = async () => {
+    if (loading) {
+      return;
+    }
+
+    clearFeedback();
+
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password');
+      setFeedbackMessage('error', 'Please enter both email and password');
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      setFeedbackMessage('error', 'Password must be at least 6 characters');
       return;
     }
 
     setLoading(true);
     try {
-      console.log('[Auth] Attempting to sign up...', { email });
-      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
       });
 
       if (error) {
-        console.error('[Auth] Sign up error:', error);
-        Alert.alert('Sign Up Failed', error.message);
+        setFeedbackMessage('error', error.message);
         setLoading(false);
         return;
       }
 
       if (data.user) {
-        console.log('[Auth] ✅ Sign up successful', { userId: data.user.id });
-        Alert.alert(
-          'Success',
-          'Account created! Please check your email to verify your account, or sign in if already verified.'
+        setFeedbackMessage(
+          'success',
+          'Account created! Check your inbox for the verification email, then sign in once verified.'
         );
         setIsSignUp(false);
       }
     } catch (error: any) {
-      console.error('[Auth] Unexpected error:', error);
-      Alert.alert('Error', error.message || 'An unexpected error occurred');
+      setFeedbackMessage(
+        'error',
+        error.message || 'An unexpected error occurred'
+      );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubmit = () => {
+    if (loading) {
+      return;
+    }
+
+    if (isSignUp) {
+      handleSignUp();
+    } else {
+      handleSignIn();
     }
   };
 
@@ -122,6 +153,19 @@ export default function SignInScreen() {
             {isSignUp ? 'Create an account' : 'Sign in to continue'}
           </Text>
 
+          {feedback && (
+            <View
+              style={[
+                styles.feedbackContainer,
+                feedback.type === 'success' && styles.feedbackSuccess,
+                feedback.type === 'error' && styles.feedbackError,
+                feedback.type === 'info' && styles.feedbackInfo,
+              ]}
+            >
+              <Text style={styles.feedbackText}>{feedback.message}</Text>
+            </View>
+          )}
+
           <View style={styles.form}>
             <TextInput
               style={styles.input}
@@ -133,6 +177,7 @@ export default function SignInScreen() {
               autoCorrect={false}
               keyboardType="email-address"
               editable={!loading}
+              returnKeyType="next"
             />
 
             <TextInput
@@ -145,11 +190,14 @@ export default function SignInScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               editable={!loading}
+              returnKeyType={isSignUp ? 'send' : 'go'}
+              onSubmitEditing={handleSubmit}
+              blurOnSubmit={false}
             />
 
             <TouchableOpacity
               style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={isSignUp ? handleSignUp : handleSignIn}
+              onPress={handleSubmit}
               disabled={loading}
             >
               {loading ? (
@@ -163,7 +211,10 @@ export default function SignInScreen() {
 
             <TouchableOpacity
               style={styles.switchButton}
-              onPress={() => setIsSignUp(!isSignUp)}
+              onPress={() => {
+                clearFeedback();
+                setIsSignUp(!isSignUp);
+              }}
               disabled={loading}
             >
               <Text style={styles.switchButtonText}>
@@ -206,6 +257,31 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     marginBottom: 40,
+  },
+  feedbackContainer: {
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 24,
+  },
+  feedbackText: {
+    color: '#222',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  feedbackSuccess: {
+    backgroundColor: '#e7f7ec',
+    borderWidth: 1,
+    borderColor: '#c4ebd2',
+  },
+  feedbackError: {
+    backgroundColor: '#fdeaea',
+    borderWidth: 1,
+    borderColor: '#f5c2c0',
+  },
+  feedbackInfo: {
+    backgroundColor: '#e8f0fe',
+    borderWidth: 1,
+    borderColor: '#c3d5fd',
   },
   form: {
     width: '100%',

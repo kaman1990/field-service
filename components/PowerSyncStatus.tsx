@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Animated, Platform, Text } from 'react-native';
 import { useStatus } from '@powersync/react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { syncService } from '../services/sync';
 import { AttachmentState } from '@powersync/attachments';
 
@@ -12,6 +13,7 @@ import { AttachmentState } from '@powersync/attachments';
  */
 export const PowerSyncStatus: React.FC = () => {
   const status = useStatus();
+  const insets = useSafeAreaInsets();
   const flashAnim = useRef(new Animated.Value(1)).current;
   const [pendingUploads, setPendingUploads] = useState(0);
 
@@ -64,7 +66,7 @@ export const PowerSyncStatus: React.FC = () => {
   };
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, { top: insets.top + 16, right: insets.right + 16 }]}>
       <Animated.View
         style={[
           styles.container,
@@ -86,9 +88,9 @@ export const PowerSyncStatus: React.FC = () => {
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    top: 50,
-    right: 10,
     zIndex: 1000,
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },

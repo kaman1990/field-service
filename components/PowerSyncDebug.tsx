@@ -51,7 +51,6 @@ export const PowerSyncDebug: React.FC = () => {
           });
           
         } catch (error: any) {
-          console.error(`[PowerSyncDebug] Error checking table ${tableName}:`, error);
           tableInfos.push({
             name: tableName,
             rowCount: -1, // Error indicator
@@ -61,7 +60,7 @@ export const PowerSyncDebug: React.FC = () => {
       
       setTables(tableInfos);
     } catch (error: any) {
-      console.error('[PowerSyncDebug] Error checking database:', error);
+      // Error checking database
     } finally {
       setLoading(false);
     }

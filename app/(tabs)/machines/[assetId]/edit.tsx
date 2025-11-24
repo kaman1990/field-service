@@ -70,7 +70,7 @@ export default function EditAssetScreen() {
       router.back();
     },
     onError: (error: any) => {
-      Alert.alert('Error', error.message || 'Failed to update asset');
+      Alert.alert('Error', error.message || 'Failed to update machine');
     },
   });
 
@@ -100,7 +100,7 @@ export default function EditAssetScreen() {
           style={styles.input}
           value={formData.name}
           onChangeText={(text) => setFormData({ ...formData, name: text })}
-          placeholder="Asset name"
+          placeholder="Machine name"
           placeholderTextColor="#999"
         />
       </View>

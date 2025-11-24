@@ -38,7 +38,7 @@ export const UploadStatus: React.FC<UploadStatusProps> = ({ refreshInterval = 20
       
       setPendingAttachments(uploadAttachments);
     } catch (error) {
-      console.error('[UploadStatus] Error loading pending attachments:', error);
+      // Error loading pending attachments
     } finally {
       setLoading(false);
     }

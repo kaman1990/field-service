@@ -57,8 +57,8 @@ export const gatewayService = {
     });
     
     await powerSync.execute(
-      `INSERT INTO gateways (id, code, description, serial_no, mac_address, ip_address, location, router, version, notes, action_notes, connection_type, mount_type, power_type, site_id, area_id, status_id, online, power_required, poe_required, router_required, flex_required, atex_area, install_approved, enabled, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO gateways (id, code, description, serial_no, mac_address, ip_address, location, router, version, notes, action_notes, connection_type, mount_type, power_type, site_id, area_id, status_id, iot_status_id, online, power_required, poe_required, router_required, flex_required, atex_area, install_approved, enabled, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         gateway.code || null,
@@ -77,6 +77,7 @@ export const gatewayService = {
         gateway.site_id || null,
         gateway.area_id || null,
         gateway.status_id || null,
+        gateway.iot_status_id || null,
         gateway.online ?? null,
         gateway.power_required ?? null,
         gateway.poe_required ?? null,
@@ -124,6 +125,7 @@ export const gatewayService = {
       'site_id',
       'area_id',
       'status_id',
+      'iot_status_id',
       'online',
       'power_required',
       'poe_required',

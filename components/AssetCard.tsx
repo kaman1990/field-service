@@ -75,7 +75,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, areaName, iotStatus
               </View>
             ) : (
               <View style={styles.badge}>
-                <Text style={[styles.badgeText, styles.badgeTextUnmapped]}>Gateway Not Mapped</Text>
+                <Text style={[styles.badgeText, styles.badgeTextUnmapped]}>Gateway: Not Mapped</Text>
               </View>
             )}
             {asset.serial_no ? (
@@ -93,7 +93,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, areaName, iotStatus
           ) : null}
           {iotStatus ? (
             <View style={styles.metaItem}>
-              <Text style={styles.metaLabel}>IoT Status</Text>
+              
               <View style={styles.statusRow}>
                 <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                 <Text style={[styles.metaValue, { color: statusColor }]}>{iotStatus}</Text>

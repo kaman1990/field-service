@@ -50,10 +50,10 @@ export default function NewAssetScreen() {
     mutationFn: (data: Partial<Asset>) => assetService.createAsset(data as any),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['assets'] });
-      router.replace(`/assets/${data.id}`);
+      router.replace(`/machines/${data.id}`);
     },
     onError: (error: any) => {
-      Alert.alert('Error', error.message || 'Failed to create asset');
+      Alert.alert('Error', error.message || 'Failed to create machine');
     },
   });
 
@@ -75,7 +75,7 @@ export default function NewAssetScreen() {
           style={styles.input}
           value={formData.name}
           onChangeText={(text) => setFormData({ ...formData, name: text })}
-          placeholder="Asset name"
+          placeholder="Machine name"
           placeholderTextColor="#999"
         />
       </View>

@@ -19,7 +19,6 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     };
     
     if (mapping[moduleName]) {
-      console.log('Remapping', moduleName, 'to', mapping[moduleName]);
       return context.resolveRequest(context, mapping[moduleName], platform);
     }
   } else {

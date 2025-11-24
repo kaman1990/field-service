@@ -95,7 +95,7 @@ export default function PointListScreen() {
         renderItem={({ item }) => (
           <PointCard
             point={item}
-            onPress={() => router.push(`/assets/points/${item.id}?assetId=${assetId}`)}
+            onPress={() => router.push(`/machines/points/${item.id}?assetId=${assetId}`)}
           />
         )}
         ListEmptyComponent={
@@ -107,7 +107,7 @@ export default function PointListScreen() {
 
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => router.push(`/assets/points/new?assetId=${assetId}`)}
+        onPress={() => router.push(`/machines/points/new?assetId=${assetId}`)}
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>

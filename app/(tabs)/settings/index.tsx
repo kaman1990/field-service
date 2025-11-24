@@ -52,7 +52,6 @@ export default function SettingsScreen() {
       setSites(sitesData);
       setRetoolUser(userData);
     } catch (error: any) {
-      console.error('[Settings] Error loading data:', error);
       Alert.alert('Error', error.message || 'Failed to load settings');
     } finally {
       setLoading(false);
@@ -70,7 +69,6 @@ export default function SettingsScreen() {
       const updated = await retoolUserService.updateDefaultSiteId(authId, siteId);
       setRetoolUser(updated);
     } catch (error: any) {
-      console.error('[Settings] Error updating default site:', error);
       Alert.alert('Error', error.message || 'Failed to update default site');
     } finally {
       setSaving(false);
@@ -83,7 +81,7 @@ export default function SettingsScreen() {
       const status = await syncService.getSyncStatus();
       setSyncStatus(status);
     } catch (error: any) {
-      console.error('[Settings] Error loading sync status:', error);
+      // Error loading sync status - silently fail
     } finally {
       setRefreshingSync(false);
     }
@@ -98,7 +96,6 @@ export default function SettingsScreen() {
         loadSyncStatus();
       }, 1000);
     } catch (error: any) {
-      console.error('[Settings] Error forcing sync:', error);
       Alert.alert('Error', error.message || 'Failed to trigger sync');
     } finally {
       setSyncing(false);
@@ -106,73 +103,54 @@ export default function SettingsScreen() {
   };
 
   const performSignOut = async () => {
-    console.log('[Settings] User confirmed sign out - performing sign out...');
     try {
-      console.log('[Settings] Starting sign out...');
       const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error('[Settings] Sign out error:', error);
         Alert.alert('Error', 'Failed to sign out: ' + error.message);
         return;
       }
-      console.log('[Settings] ✅ Sign out successful, waiting for navigation...');
       // Navigation will be handled by auth state change listener in _layout.tsx
       // Give it a moment to process
       await new Promise(resolve => setTimeout(resolve, 100));
     } catch (error: any) {
-      console.error('[Settings] Unexpected sign out error:', error);
       Alert.alert('Error', 'An unexpected error occurred during sign out');
     }
   };
 
   const handleSignOut = async () => {
-    console.log('[Settings] handleSignOut called - button was clicked!');
-    console.log('[Settings] Platform:', Platform.OS);
-    
     // On web, use browser's confirm dialog as Alert.alert may not work reliably
     if (Platform.OS === 'web') {
-      console.log('[Settings] Using browser confirm dialog (web platform)');
       if (typeof window !== 'undefined' && window.confirm) {
         const confirmed = window.confirm('Are you sure you want to sign out?');
         if (confirmed) {
-          console.log('[Settings] User confirmed via browser confirm');
           await performSignOut();
-        } else {
-          console.log('[Settings] Sign out cancelled by user (browser confirm)');
         }
       } else {
         // Fallback: directly sign out if confirm is not available
-        console.log('[Settings] window.confirm not available, signing out directly');
         await performSignOut();
       }
       return;
     }
     
     // On native platforms, use Alert.alert
-    console.log('[Settings] Showing Alert dialog (native platform)...');
     Alert.alert(
       'Sign Out',
       'Are you sure you want to sign out?',
       [
         { 
           text: 'Cancel', 
-          style: 'cancel', 
-          onPress: () => {
-            console.log('[Settings] Sign out cancelled by user');
-          }
+          style: 'cancel'
         },
         {
           text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
-            console.log('[Settings] User confirmed sign out - alert button pressed!');
             await performSignOut();
           },
         },
       ],
-      { cancelable: true, onDismiss: () => console.log('[Settings] Alert dismissed without action') }
+      { cancelable: true }
     );
-    console.log('[Settings] Alert.alert called (this should appear immediately after)');
   };
 
   const formatBytes = (bytes?: number): string => {
@@ -305,10 +283,7 @@ export default function SettingsScreen() {
 
       <TouchableOpacity
         style={styles.signOutButton}
-        onPress={() => {
-          console.log('[Settings] Sign out button pressed!');
-          handleSignOut();
-        }}
+        onPress={handleSignOut}
         activeOpacity={0.7}
       >
         <Text style={styles.signOutText}>Sign Out</Text>

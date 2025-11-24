@@ -234,7 +234,6 @@ export interface Image {
   id: string;
   image_url?: string;
   image_id?: string; // Storage bucket filename
-  resized_image_url?: string;
   asset_id?: string;
   point_id?: string;
   gateway_id?: string;

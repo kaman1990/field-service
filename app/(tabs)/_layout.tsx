@@ -1,13 +1,29 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Text, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: '#999',
+        tabBarStyle: Platform.OS === 'web' ? {
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+        } : {
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          paddingBottom: insets.bottom,
+          height: (Platform.OS === 'ios' ? 49 : 56) + insets.bottom,
+        },
       }}
       initialRouteName="dashboard"
     >
@@ -19,9 +35,9 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="assets"
+        name="machines"
         options={{
-          title: 'Assets',
+          title: 'Machines',
           tabBarIcon: () => <Text>📦</Text>,
         }}
       />

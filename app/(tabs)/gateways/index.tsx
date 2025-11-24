@@ -10,7 +10,8 @@ import { FilterPanel } from '../../../components/FilterPanel';
 import { lookupService } from '../../../services/lookups';
 import { gatewayService } from '../../../services/gateways';
 import { buildGatewaysQuery } from '../../../lib/powersync-queries';
-import type { Gateway, Area, GatewayStatus } from '../../../types/database';
+import { getPowerSync } from '../../../lib/powersync';
+import type { Gateway, Area, GatewayStatus, GatewayIotStatus } from '../../../types/database';
 
 export default function GatewayListScreen() {
   const router = useRouter();
@@ -20,12 +21,13 @@ export default function GatewayListScreen() {
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(true);
   const [selectedAreaId, setSelectedAreaId] = useState<string | undefined>();
   const [selectedStatusId, setSelectedStatusId] = useState<string | undefined>();
+  const [selectedIotStatusId, setSelectedIotStatusId] = useState<string | undefined>();
   const [selectedConnectionType, setSelectedConnectionType] = useState<string | undefined>();
   const [contextMenuGatewayId, setContextMenuGatewayId] = useState<string | null>(null);
   const [noteModalVisible, setNoteModalVisible] = useState(false);
   const [noteInput, setNoteInput] = useState('');
   const [editingGatewayId, setEditingGatewayId] = useState<string | null>(null);
-  const [pendingStatusUpdate, setPendingStatusUpdate] = useState<{ gatewayId: string; statusId: string | null; reason: string } | null>(null);
+  const [pendingStatusUpdate, setPendingStatusUpdate] = useState<{ gatewayId: string; statusId: string | null; reason: string; isIotStatus?: boolean } | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -34,14 +36,64 @@ export default function GatewayListScreen() {
     return () => clearTimeout(timer);
   }, [searchText]);
 
-  const { data: areas = [] } = useReactQuery<Area[]>({
-    queryKey: ['areas'],
+  // Watch for changes to lookup tables and invalidate React Query cache
+  useEffect(() => {
+    try {
+      const powerSync = getPowerSync();
+      if (!powerSync) return;
+
+      // Watch for changes to lookup tables
+      const dispose = powerSync.onChange({
+        onChange: async (event: { changedTables?: string[] }) => {
+          const changedTables = event.changedTables || [];
+          
+          // If any lookup tables changed, invalidate the React Query cache
+          // Handle different table name formats (e.g., 'areas', 'public_areas', 'public.areas')
+          const lookupTablePatterns = ['areas', 'gateway_status', 'gateway_iot_status'];
+          const hasLookupTableChange = changedTables.some((table: string) => 
+            lookupTablePatterns.some(pattern => 
+              table === pattern || 
+              table.includes(pattern) ||
+              table.endsWith(`_${pattern}`) ||
+              table.endsWith(`.${pattern}`)
+            )
+          );
+          
+          if (hasLookupTableChange) {
+            queryClient.invalidateQueries({ queryKey: ['allAreas'] });
+            queryClient.invalidateQueries({ queryKey: ['allGatewayStatuses'] });
+            queryClient.invalidateQueries({ queryKey: ['gatewayIotStatuses'] });
+          }
+        },
+        onError: (error: any) => {
+          // Error watching PowerSync changes
+        }
+      }, {
+        tables: ['areas', 'gateway_status', 'gateway_iot_status'],
+        triggerImmediate: false
+      });
+
+      return () => {
+        dispose();
+      };
+    } catch (error: any) {
+      // Error setting up PowerSync watcher
+    }
+  }, [queryClient]);
+
+  const { data: allAreas = [] } = useReactQuery<Area[]>({
+    queryKey: ['allAreas'],
     queryFn: () => lookupService.getAreas(),
   });
 
   const { data: statuses = [] } = useReactQuery<GatewayStatus[]>({
-    queryKey: ['gatewayStatuses'],
+    queryKey: ['allGatewayStatuses'],
     queryFn: () => lookupService.getGatewayStatuses(),
+  });
+
+  const { data: gatewayIotStatuses = [] } = useReactQuery<GatewayIotStatus[]>({
+    queryKey: ['gatewayIotStatuses'],
+    queryFn: () => lookupService.getGatewayIotStatuses(),
   });
 
   // Find status IDs for "not required" and "not installed"
@@ -55,21 +107,51 @@ export default function GatewayListScreen() {
     return status?.id || null;
   }, [statuses]);
 
+  // Find IoT status IDs for "not required" and "not installed"
+  const notRequiredIotStatusId = useMemo(() => {
+    const status = gatewayIotStatuses.find(s => s.status?.toLowerCase().includes('not required'));
+    return status?.id || null;
+  }, [gatewayIotStatuses]);
+
+  const notInstalledIotStatusId = useMemo(() => {
+    const status = gatewayIotStatuses.find(s => s.status?.toLowerCase().includes('not installed'));
+    return status?.id || null;
+  }, [gatewayIotStatuses]);
+
   const { sql, params } = useMemo(() => {
     try {
       return buildGatewaysQuery({
         search: debouncedSearchText || undefined,
         areaId: selectedAreaId,
         statusId: selectedStatusId,
+        iotStatusId: selectedIotStatusId,
         connectionType: selectedConnectionType,
       });
     } catch (error) {
-      console.error('[Gateways] Error building query:', error);
+      // Error building query
       return { sql: '', params: [] };
     }
-  }, [debouncedSearchText, selectedAreaId, selectedStatusId, selectedConnectionType]);
+  }, [debouncedSearchText, selectedAreaId, selectedStatusId, selectedIotStatusId, selectedConnectionType]);
+
+  // Query for counting gateways by status (without status filter)
+  const { sql: countSql, params: countParams } = useMemo(() => buildGatewaysQuery({
+    search: debouncedSearchText || undefined,
+    areaId: selectedAreaId,
+    statusId: selectedStatusId,
+    connectionType: selectedConnectionType,
+  }), [debouncedSearchText, selectedAreaId, selectedStatusId, selectedConnectionType]);
+
+  // Query for counting gateways by IoT status (without IoT status filter, but respects other filters)
+  const { sql: iotCountSql, params: iotCountParams } = useMemo(() => buildGatewaysQuery({
+    search: debouncedSearchText || undefined,
+    areaId: selectedAreaId,
+    statusId: selectedStatusId,
+    connectionType: selectedConnectionType,
+  }), [debouncedSearchText, selectedAreaId, selectedStatusId, selectedConnectionType]);
 
   const { data: gateways = [], isLoading } = useQuery<Gateway>(sql || 'SELECT * FROM gateways WHERE 1=0', params);
+  const { data: allFilteredGateways = [] } = useQuery<Gateway>(countSql || 'SELECT * FROM gateways WHERE 1=0', countParams);
+  const { data: allFilteredGatewaysForIot = [] } = useQuery<Gateway>(iotCountSql || 'SELECT * FROM gateways WHERE 1=0', iotCountParams);
 
   const connectionTypes = useMemo(() => {
     return Array.from(new Set(gateways.map(g => g.connection_type).filter(Boolean)));
@@ -92,11 +174,15 @@ export default function GatewayListScreen() {
   const handleSaveNote = async () => {
     if (!editingGatewayId) return;
     try {
-      const updateData: { notes: string; status_id?: string | null } = { notes: noteInput };
+      const updateData: { notes: string; status_id?: string | null; iot_status_id?: string | null } = { notes: noteInput };
       
       // If there's a pending status update, include it
       if (pendingStatusUpdate && pendingStatusUpdate.gatewayId === editingGatewayId) {
-        updateData.status_id = pendingStatusUpdate.statusId as any;
+        if (pendingStatusUpdate.isIotStatus) {
+          updateData.iot_status_id = pendingStatusUpdate.statusId as any;
+        } else {
+          updateData.status_id = pendingStatusUpdate.statusId as any;
+        }
       }
       
       await gatewayService.updateGateway(editingGatewayId, updateData);
@@ -106,7 +192,7 @@ export default function GatewayListScreen() {
       setEditingGatewayId(null);
       setPendingStatusUpdate(null);
     } catch (error) {
-      console.error('Error updating note:', error);
+      // Error updating note
       Alert.alert('Error', 'Failed to update note. Please try again.');
     }
   };
@@ -131,7 +217,7 @@ export default function GatewayListScreen() {
         queryClient.invalidateQueries({ queryKey: ['gateways'] });
         setContextMenuGatewayId(null);
       } catch (error) {
-        console.error('Error updating status:', error);
+        // Error updating status
         Alert.alert('Error', 'Failed to update status. Please try again.');
       }
       return;
@@ -165,7 +251,7 @@ export default function GatewayListScreen() {
         queryClient.invalidateQueries({ queryKey: ['gateways'] });
         setContextMenuGatewayId(null);
       } catch (error) {
-        console.error('Error updating status:', error);
+        // Error updating status
         Alert.alert('Error', 'Failed to update status. Please try again.');
       }
       return;
@@ -178,6 +264,106 @@ export default function GatewayListScreen() {
     setNoteInput('');
     setNoteModalVisible(true);
   };
+
+  const handleSetIotNotRequired = async () => {
+    if (!contextMenuGatewayId) return;
+    const gateway = gateways.find(g => g.id === contextMenuGatewayId);
+    if (!gateway) return;
+    
+    const isCurrentlyNotRequired = gateway.iot_status_id === notRequiredIotStatusId;
+    
+    if (!notRequiredIotStatusId && !isCurrentlyNotRequired) {
+      Alert.alert('Error', 'Could not find "Not Required" IoT status.');
+      setContextMenuGatewayId(null);
+      return;
+    }
+    
+    // If clearing, update immediately without note
+    if (isCurrentlyNotRequired) {
+      try {
+        await gatewayService.updateGateway(contextMenuGatewayId, { iot_status_id: null });
+        queryClient.invalidateQueries({ queryKey: ['gateways'] });
+        setContextMenuGatewayId(null);
+      } catch (error) {
+        // Error updating status
+        Alert.alert('Error', 'Failed to update IoT status. Please try again.');
+      }
+      return;
+    }
+    
+    // If setting, prompt for note first
+    setContextMenuGatewayId(null);
+    setEditingGatewayId(contextMenuGatewayId);
+    setPendingStatusUpdate({ gatewayId: contextMenuGatewayId, statusId: notRequiredIotStatusId!, reason: 'Not Required (IoT)', isIotStatus: true });
+    setNoteInput('');
+    setNoteModalVisible(true);
+  };
+
+  const handleSetIotNotInstalled = async () => {
+    if (!contextMenuGatewayId) return;
+    const gateway = gateways.find(g => g.id === contextMenuGatewayId);
+    if (!gateway) return;
+    
+    const isCurrentlyNotInstalled = gateway.iot_status_id === notInstalledIotStatusId;
+    
+    if (!notInstalledIotStatusId && !isCurrentlyNotInstalled) {
+      Alert.alert('Error', 'Could not find "Not Installed" IoT status.');
+      setContextMenuGatewayId(null);
+      return;
+    }
+    
+    // If clearing, update immediately without note
+    if (isCurrentlyNotInstalled) {
+      try {
+        await gatewayService.updateGateway(contextMenuGatewayId, { iot_status_id: null });
+        queryClient.invalidateQueries({ queryKey: ['gateways'] });
+        setContextMenuGatewayId(null);
+      } catch (error) {
+        // Error updating status
+        Alert.alert('Error', 'Failed to update IoT status. Please try again.');
+      }
+      return;
+    }
+    
+    // If setting, prompt for note first
+    setContextMenuGatewayId(null);
+    setEditingGatewayId(contextMenuGatewayId);
+    setPendingStatusUpdate({ gatewayId: contextMenuGatewayId, statusId: notInstalledIotStatusId!, reason: 'Not Installed (IoT)', isIotStatus: true });
+    setNoteInput('');
+    setNoteModalVisible(true);
+  };
+
+  const areaMap = useMemo(() => {
+    return new Map(allAreas.map(a => [a.id, a.name]));
+  }, [allAreas]);
+
+  const statusMap = useMemo(() => {
+    return new Map(statuses.map(s => [s.id, s.status || 'Unknown']));
+  }, [statuses]);
+
+  const gatewayIotStatusMap = useMemo(() => {
+    return new Map(gatewayIotStatuses.map(s => [s.id, s.status || 'Unknown']));
+  }, [gatewayIotStatuses]);
+
+  // Count gateways by status
+  const statusCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    allFilteredGateways.forEach((gateway) => {
+      const statusId = gateway.status_id || 'none';
+      counts.set(statusId, (counts.get(statusId) || 0) + 1);
+    });
+    return counts;
+  }, [allFilteredGateways]);
+
+  // Count gateways by IoT status
+  const iotStatusCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    allFilteredGatewaysForIot.forEach((gateway) => {
+      const statusId = gateway.iot_status_id || 'none';
+      counts.set(statusId, (counts.get(statusId) || 0) + 1);
+    });
+    return counts;
+  }, [allFilteredGatewaysForIot]);
 
   if (isLoading) {
     return (
@@ -205,16 +391,35 @@ export default function GatewayListScreen() {
           <View>
             <FilterPanel
               label="Area"
-              options={areas.map(a => ({ id: a.id, label: a.name }))}
+              options={allAreas.map(a => ({ id: a.id, label: a.name }))}
               selectedId={selectedAreaId}
               onSelect={setSelectedAreaId}
             />
             
             <FilterPanel
               label="Status"
-              options={statuses.map(s => ({ id: s.id, label: s.status || 'Unknown' }))}
+              options={statuses.map(s => {
+                const count = statusCounts.get(s.id || '') || 0;
+                return { 
+                  id: s.id, 
+                  label: `${s.status || 'Unknown'} (${count})` 
+                };
+              })}
               selectedId={selectedStatusId}
               onSelect={setSelectedStatusId}
+            />
+            
+            <FilterPanel
+              label="IoT Status"
+              options={gatewayIotStatuses.map(s => {
+                const count = iotStatusCounts.get(s.id || '') || 0;
+                return { 
+                  id: s.id, 
+                  label: `${s.status || 'Unknown'} (${count})` 
+                };
+              })}
+              selectedId={selectedIotStatusId}
+              onSelect={setSelectedIotStatusId}
             />
             
             <FilterPanel
@@ -230,13 +435,22 @@ export default function GatewayListScreen() {
       <FlatList
         data={gateways}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <GatewayCard
-            gateway={item}
-            onPress={() => router.push(`/gateways/${item.id}`)}
-            onLongPress={() => setContextMenuGatewayId(item.id)}
-          />
-        )}
+        renderItem={({ item }) => {
+          const areaName = item.area_id ? areaMap.get(item.area_id) : undefined;
+          const status = item.status_id ? statusMap.get(item.status_id) : undefined;
+          const iotStatus = item.iot_status_id ? gatewayIotStatusMap.get(item.iot_status_id) : undefined;
+          
+          return (
+            <GatewayCard
+              gateway={item}
+              areaName={areaName}
+              status={status}
+              iotStatus={iotStatus}
+              onPress={() => router.push(`/gateways/${item.id}`)}
+              onLongPress={() => setContextMenuGatewayId(item.id)}
+            />
+          );
+        }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No gateways found</Text>
@@ -268,6 +482,8 @@ export default function GatewayListScreen() {
               const currentGateway = gateways.find(g => g.id === contextMenuGatewayId);
               const isNotRequired = currentGateway?.status_id === notRequiredStatusId;
               const isNotInstalled = currentGateway?.status_id === notInstalledStatusId;
+              const isIotNotRequired = currentGateway?.iot_status_id === notRequiredIotStatusId;
+              const isIotNotInstalled = currentGateway?.iot_status_id === notInstalledIotStatusId;
               
               return (
                 <>
@@ -320,6 +536,41 @@ export default function GatewayListScreen() {
                       Set to Not Installed
                     </Text>
                     {isNotInstalled && (
+                      <Ionicons name="checkmark" size={18} color="#4CAF50" style={styles.contextMenuCheckmark} />
+                    )}
+                  </TouchableOpacity>
+                  
+                  <View style={styles.contextMenuDivider} />
+                  
+                  <TouchableOpacity
+                    style={styles.contextMenuItem}
+                    onPress={handleSetIotNotRequired}
+                  >
+                    <Ionicons 
+                      name={isIotNotRequired ? "checkmark-circle" : "close-circle-outline"} 
+                      size={20} 
+                      color={isIotNotRequired ? "#4CAF50" : "#333"} 
+                    />
+                    <Text style={[styles.contextMenuText, isIotNotRequired && styles.contextMenuTextActive]}>
+                      Set IoT to Not Required
+                    </Text>
+                    {isIotNotRequired && (
+                      <Ionicons name="checkmark" size={18} color="#4CAF50" style={styles.contextMenuCheckmark} />
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.contextMenuItem}
+                    onPress={handleSetIotNotInstalled}
+                  >
+                    <Ionicons 
+                      name={isIotNotInstalled ? "checkmark-circle" : "remove-circle-outline"} 
+                      size={20} 
+                      color={isIotNotInstalled ? "#4CAF50" : "#333"} 
+                    />
+                    <Text style={[styles.contextMenuText, isIotNotInstalled && styles.contextMenuTextActive]}>
+                      Set IoT to Not Installed
+                    </Text>
+                    {isIotNotInstalled && (
                       <Ionicons name="checkmark" size={18} color="#4CAF50" style={styles.contextMenuCheckmark} />
                     )}
                   </TouchableOpacity>
@@ -433,17 +684,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     backgroundColor: '#f5f5f5',
   },
   filtersHeaderText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#333',
   },
   chevron: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#666',
   },
   contextMenuOverlay: {

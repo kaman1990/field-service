@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 import { getPowerSync } from '../lib/powersync';
 import { connectPowerSync } from '../lib/powersync';
 import { PowerSyncStatus } from '../components/PowerSyncStatus';
-import { initializeCamera } from '../lib/camera-init';
+import { UpdateBanner } from '../components/UpdateBanner';
 
 // Import PowerSyncContext
 let PowerSyncContext: any;
@@ -27,21 +27,14 @@ export default function RootLayout() {
   const segments = useSegments();
   const router = useRouter();
 
-  // Initialize PowerSync and Camera
+  // Initialize PowerSync
   useEffect(() => {
     try {
       const instance = getPowerSync();
       setPowerSync(instance);
     } catch (error) {
-      console.error('[App] PowerSync initialization error:', error);
       setPowerSync(null);
     }
-
-    // Pre-initialize camera to ensure it works offline
-    // This initializes the camera module early so it doesn't need network on first use
-    initializeCamera().catch(() => {
-      // Silent fail - camera will still work, just might initialize on first use
-    });
   }, []);
 
   // Check auth state and redirect
@@ -68,25 +61,20 @@ export default function RootLayout() {
             // Silent fail
           });
         }, 500);
-        router.replace('/(tabs)/assets');
+        router.replace('/(tabs)/machines');
       } else if (event === 'SIGNED_OUT') {
-        console.log('[App] SIGNED_OUT event received, clearing PowerSync...');
         try {
           // Get PowerSync instance directly to ensure we have it
           try {
             const powerSyncInstance = getPowerSync();
             if (powerSyncInstance) {
               // Use disconnectAndClear to properly clear the database on logout
-              console.log('[App] Clearing PowerSync database on sign out...');
               await powerSyncInstance.disconnectAndClear();
-              console.log('[App] PowerSync database cleared successfully');
             }
           } catch (getInstanceError) {
             // PowerSync might not be initialized, which is fine
-            console.log('[App] PowerSync instance not available, skipping clear');
           }
         } catch (error) {
-          console.error('[App] Error clearing PowerSync on sign out:', error);
           // Try to disconnect even if clear fails
           try {
             const powerSyncInstance = getPowerSync();
@@ -94,11 +82,10 @@ export default function RootLayout() {
               await powerSyncInstance.disconnect();
             }
           } catch (disconnectError) {
-            console.error('[App] Error disconnecting PowerSync:', disconnectError);
+            // Error disconnecting PowerSync
           }
         }
         // Ensure navigation happens after cleanup
-        console.log('[App] Navigating to sign-in screen...');
         setTimeout(() => {
           router.replace('/sign-in');
         }, 100);
@@ -141,6 +128,7 @@ export default function RootLayout() {
   return (
     <PowerSyncContext.Provider value={powerSync}>
       <QueryClientProvider client={queryClient}>
+        <UpdateBanner />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="sign-in" />

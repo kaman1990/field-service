@@ -74,7 +74,7 @@ export default function AssetListScreen() {
           }
         },
         onError: (error: any) => {
-          console.error('[AssetList] Error watching PowerSync changes:', error);
+          // Error watching PowerSync changes
         }
       }, {
         tables: ['areas', 'asset_iot_status', 'gateways'],
@@ -85,7 +85,7 @@ export default function AssetListScreen() {
         dispose();
       };
     } catch (error: any) {
-      console.error('[AssetList] Error setting up PowerSync watcher:', error);
+      // Error setting up PowerSync watcher
     }
   }, [queryClient]);
 
@@ -111,15 +111,31 @@ export default function AssetListScreen() {
     gatewayId: selectedGatewayId,
   }), [debouncedSearchText, selectedAreaId, selectedIotStatusId, selectedGatewayId]);
 
-  // Query for counting assets by status (without IoT status filter)
+  // Query for counting assets by IoT status (without IoT status filter, but respects other filters)
   const { sql: countSql, params: countParams } = useMemo(() => buildAssetsQuery({
     search: debouncedSearchText || undefined,
     areaId: selectedAreaId,
     gatewayId: selectedGatewayId,
   }), [debouncedSearchText, selectedAreaId, selectedGatewayId]);
 
+  // Query for counting assets by area (without area filter)
+  const { sql: areaCountSql, params: areaCountParams } = useMemo(() => buildAssetsQuery({
+    search: debouncedSearchText || undefined,
+    iotStatusId: selectedIotStatusId,
+    gatewayId: selectedGatewayId,
+  }), [debouncedSearchText, selectedIotStatusId, selectedGatewayId]);
+
+  // Query for counting assets by gateway (without gateway filter)
+  const { sql: gatewayCountSql, params: gatewayCountParams } = useMemo(() => buildAssetsQuery({
+    search: debouncedSearchText || undefined,
+    areaId: selectedAreaId,
+    iotStatusId: selectedIotStatusId,
+  }), [debouncedSearchText, selectedAreaId, selectedIotStatusId]);
+
   const { data: assets = [], isLoading } = useQuery<Asset>(sql, params);
   const { data: allFilteredAssets = [] } = useQuery<Asset>(countSql, countParams);
+  const { data: allFilteredAssetsForArea = [] } = useQuery<Asset>(areaCountSql, areaCountParams);
+  const { data: allFilteredAssetsForGateway = [] } = useQuery<Asset>(gatewayCountSql, gatewayCountParams);
 
   const handleSearchChange = useCallback((text: string) => {
     setSearchText(text);
@@ -152,7 +168,7 @@ export default function AssetListScreen() {
       setEditingAssetId(null);
       setPendingStatusUpdate(null);
     } catch (error) {
-      console.error('Error updating note:', error);
+      // Error updating note
       Alert.alert('Error', 'Failed to update note. Please try again.');
     }
   };
@@ -177,7 +193,7 @@ export default function AssetListScreen() {
         queryClient.invalidateQueries({ queryKey: ['assets'] });
         setContextMenuAssetId(null);
       } catch (error) {
-        console.error('Error updating status:', error);
+        // Error updating status
         Alert.alert('Error', 'Failed to update status. Please try again.');
       }
       return;
@@ -210,7 +226,7 @@ export default function AssetListScreen() {
       setAssigningAssetId(null);
       setSelectedGatewayForAssign(null);
     } catch (error) {
-      console.error('Error updating gateway:', error);
+      // Error updating gateway
       Alert.alert('Error', 'Failed to assign gateway. Please try again.');
     }
   };
@@ -244,7 +260,7 @@ export default function AssetListScreen() {
         queryClient.invalidateQueries({ queryKey: ['assets'] });
         setContextMenuAssetId(null);
       } catch (error) {
-        console.error('Error updating status:', error);
+        // Error updating status
         Alert.alert('Error', 'Failed to update status. Please try again.');
       }
       return;
@@ -287,6 +303,26 @@ export default function AssetListScreen() {
     return counts;
   }, [allFilteredAssets]);
 
+  // Count assets by area
+  const areaCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    allFilteredAssetsForArea.forEach((asset) => {
+      const areaId = asset.area_id || 'none';
+      counts.set(areaId, (counts.get(areaId) || 0) + 1);
+    });
+    return counts;
+  }, [allFilteredAssetsForArea]);
+
+  // Count assets by gateway
+  const gatewayCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    allFilteredAssetsForGateway.forEach((asset) => {
+      const gatewayId = asset.gateway_id || 'none';
+      counts.set(gatewayId, (counts.get(gatewayId) || 0) + 1);
+    });
+    return counts;
+  }, [allFilteredAssetsForGateway]);
+
   if (isLoading) {
     return (
       <View style={styles.centerContainer}>
@@ -297,7 +333,7 @@ export default function AssetListScreen() {
 
   return (
     <View style={styles.container}>
-      <SearchBar value={searchText} onChangeText={handleSearchChange} placeholder="Search assets..." />
+      <SearchBar value={searchText} onChangeText={handleSearchChange} placeholder="Search machines..." />
       
       <View style={styles.filtersContainer}>
         <TouchableOpacity 
@@ -313,14 +349,26 @@ export default function AssetListScreen() {
           <View>
             <FilterPanel
               label="Area"
-              options={allAreas.map(a => ({ id: a.id, label: a.name }))}
+              options={allAreas.map(a => {
+                const count = areaCounts.get(a.id || '') || 0;
+                return { 
+                  id: a.id, 
+                  label: `${a.name} (${count})` 
+                };
+              })}
               selectedId={selectedAreaId}
               onSelect={setSelectedAreaId}
             />
             
             <FilterPanel
               label="Gateway"
-              options={gateways.map(g => ({ id: g.id, label: g.code || 'Unknown' }))}
+              options={gateways.map(g => {
+                const count = gatewayCounts.get(g.id || '') || 0;
+                return { 
+                  id: g.id, 
+                  label: `${g.code || 'Unknown'} (${count})` 
+                };
+              })}
               selectedId={selectedGatewayId}
               onSelect={setSelectedGatewayId}
             />
@@ -356,21 +404,21 @@ export default function AssetListScreen() {
               areaName={areaName}
               iotStatus={iotStatus}
               gatewayName={gatewayName}
-              onPress={() => router.push(`/assets/${item.id}`)}
+              onPress={() => router.push(`/machines/${item.id}`)}
               onLongPress={() => setContextMenuAssetId(item.id)}
             />
           );
         }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No assets found</Text>
+            <Text style={styles.emptyText}>No machines found</Text>
           </View>
         }
       />
 
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => router.push('/assets/new')}
+        onPress={() => router.push('/machines/new')}
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
@@ -399,11 +447,11 @@ export default function AssetListScreen() {
                     style={styles.contextMenuItem}
                     onPress={() => {
                       setContextMenuAssetId(null);
-                      router.push(`/assets/${contextMenuAssetId}/edit`);
+                      router.push(`/machines/${contextMenuAssetId}/edit`);
                     }}
                   >
                     <Ionicons name="create-outline" size={20} color="#333" />
-                    <Text style={styles.contextMenuText}>Edit Asset</Text>
+                    <Text style={styles.contextMenuText}>Edit Machine</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.contextMenuItem}
@@ -582,7 +630,7 @@ export default function AssetListScreen() {
                 setCameraModalVisible(false);
                 setCameraAssetId(null);
               } catch (error) {
-                console.error('Error uploading images:', error);
+                // Error uploading images
                 // Only show error if it's not a network/offline error
                 if (!isNetworkError(error)) {
                   Alert.alert('Error', 'Failed to upload some images. Please try again.');
@@ -771,3 +819,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

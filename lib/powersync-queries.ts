@@ -37,7 +37,7 @@ export async function initializeTableNames(): Promise<void> {
       if (found) tableNameCache.set(tableName, found);
     }
   } catch (error) {
-    console.error('[PowerSync] Error initializing table names:', error);
+    // Error initializing table names
   }
 }
 
@@ -101,6 +101,7 @@ export function buildGatewaysQuery(filters?: {
   search?: string;
   areaId?: string;
   statusId?: string;
+  iotStatusId?: string;
   connectionType?: string;
 }): { sql: string; params: QueryParam[] } {
   const tableName = getTableName('gateways');
@@ -121,6 +122,11 @@ export function buildGatewaysQuery(filters?: {
   if (filters?.statusId) {
     sql += ' AND status_id = ?';
     params.push(filters.statusId);
+  }
+  
+  if (filters?.iotStatusId) {
+    sql += ' AND iot_status_id = ?';
+    params.push(filters.iotStatusId);
   }
   
   if (filters?.connectionType) {

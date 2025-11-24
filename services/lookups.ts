@@ -1,5 +1,5 @@
 import { getInitializedPowerSync } from '../lib/powersync';
-import type { Site, Area, AssetHealthStatus, AssetIotStatus, PointIotStatus, AssetType, GatewayStatus, Gateway } from '../types/database';
+import type { Site, Area, AssetHealthStatus, AssetIotStatus, PointIotStatus, AssetType, GatewayStatus, GatewayIotStatus, Gateway } from '../types/database';
 
 export const lookupService = {
   async getSites(): Promise<Site[]> {
@@ -61,6 +61,14 @@ export const lookupService = {
     const powerSync = await getInitializedPowerSync();
     return await powerSync.getAll<GatewayStatus>(
       'SELECT * FROM gateway_status WHERE enabled = ? ORDER BY status',
+      [true]
+    );
+  },
+
+  async getGatewayIotStatuses(): Promise<GatewayIotStatus[]> {
+    const powerSync = await getInitializedPowerSync();
+    return await powerSync.getAll<GatewayIotStatus>(
+      'SELECT * FROM gateway_iot_status WHERE enabled = ? ORDER BY sort_order',
       [true]
     );
   },

@@ -44,6 +44,11 @@ export default function EditGatewayScreen() {
     queryFn: () => lookupService.getGatewayStatuses(),
   });
 
+  const { data: gatewayIotStatuses = [] } = useReactQuery({
+    queryKey: ['gatewayIotStatuses'],
+    queryFn: () => lookupService.getGatewayIotStatuses(),
+  });
+
   useEffect(() => {
     if (gateway) {
       const initialFormData: Partial<Gateway> = {
@@ -135,6 +140,16 @@ export default function EditGatewayScreen() {
           options={statuses.map((status) => ({ label: status.status || 'Unknown', value: status.id }))}
           onValueChange={(value) => setFormData({ ...formData, status_id: value || undefined })}
           placeholder="Select Status"
+        />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.label}>IoT Status</Text>
+        <SimplePicker
+          value={formData.iot_status_id || null}
+          options={gatewayIotStatuses.map((status) => ({ label: status.status || 'Unknown', value: status.id }))}
+          onValueChange={(value) => setFormData({ ...formData, iot_status_id: value || undefined })}
+          placeholder="Select IoT Status"
         />
       </View>
 

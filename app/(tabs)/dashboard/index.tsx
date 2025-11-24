@@ -144,17 +144,17 @@ export default function DashboardScreen() {
 
       <View style={styles.statsContainer}>
         <StatCard
-          title="Assets"
+          title="Machines"
           count={assetsCount}
           icon="📦"
-          onPress={() => router.push('/(tabs)/assets')}
+          onPress={() => router.push('/(tabs)/machines')}
         />
         
         <StatCard
           title="Points"
           count={pointsCount}
           icon="📍"
-          onPress={() => router.push('/(tabs)/assets/points')}
+          onPress={() => router.push('/(tabs)/machines/points')}
         />
         
         <StatCard
@@ -170,7 +170,7 @@ export default function DashboardScreen() {
         <Text style={styles.sectionTitle}>IoT Status</Text>
 
         {/* Assets Details */}
-        <DetailCard title="Assets" icon="📦">
+        <DetailCard title="Machines" icon="📦">
           {assetStats.byStatus.length > 0 ? (
             assetStats.byStatus.map((status) => (
               <StatRow key={status.name} label={status.name} value={status.count} />

@@ -21,7 +21,7 @@ try {
   const attachmentsLib = require('@powersync/attachments');
   AttachmentTable = attachmentsLib.AttachmentTable;
 } catch (error) {
-  console.error('[PowerSync] Failed to load attachments library:', error);
+  // Attachment library not available
 }
 
 const IS_WEB = Platform.OS === 'web';
@@ -40,7 +40,7 @@ if (IS_WEB) {
     PowerSyncBackendConnector = webSDK.PowerSyncBackendConnector;
     AbstractPowerSyncDatabase = webSDK.AbstractPowerSyncDatabase;
   } catch (error) {
-    console.error('[PowerSync] Failed to load web SDK:', error);
+    // Web SDK not available
   }
 } else {
   // Native platform - use React Native SDK
@@ -56,7 +56,7 @@ if (IS_WEB) {
     const sqljsAdapter = require('@powersync/adapter-sql-js');
     SQLJSOpenFactory = sqljsAdapter.SQLJSOpenFactory;
   } catch (error) {
-    console.error('[PowerSync] Failed to load native SDK:', error);
+    // Native SDK not available
   }
 }
 
@@ -315,7 +315,6 @@ const gateway_iot_status = new Table({
 const images = new Table({
   image_url: column.text,
   image_id: column.text, // Storage bucket filename
-  resized_image_url: column.text,
   asset_id: column.text,
   point_id: column.text,
   gateway_id: column.text,
@@ -417,50 +416,30 @@ export type Database = (typeof AppSchema)['types'];
 // Create PowerSync connector
 class SupabaseConnector implements PowerSyncBackendConnector {
   async fetchCredentials() {
-    console.log('[PowerSync] [fetchCredentials] Starting...');
-    
     if (!POWER_SYNC_URL) {
-      console.error('[PowerSync] [fetchCredentials] PowerSync URL is not configured');
       throw new Error('PowerSync URL is not configured. Please set powersyncUrl in app.json');
     }
     
-    console.log('[PowerSync] [fetchCredentials] Getting Supabase session...');
     // Get the current Supabase session
     const { data: { session }, error } = await supabase.auth.getSession();
-    console.log('[PowerSync] [fetchCredentials] Supabase session retrieved:', {
-      hasSession: !!session,
-      hasError: !!error
-    });
     
     if (error) {
-      console.error('[PowerSync] [fetchCredentials] Error fetching Supabase session:', error);
       throw error;
     }
     
     if (!session) {
-      console.log('[PowerSync] [fetchCredentials] No Supabase session found - user not signed in');
-      console.log('[PowerSync] [fetchCredentials] Connection will be retried when user signs in');
       return null; // Return null if user is not signed in - PowerSync will retry
     }
 
     if (!session.access_token) {
-      console.error('[PowerSync] [fetchCredentials] Supabase session exists but has no access token');
       throw new Error('Supabase session has no access token');
     }
-
-    console.log('[PowerSync] [fetchCredentials] ✅ Credentials fetched successfully', {
-      endpoint: POWER_SYNC_URL,
-      userId: session.user.id,
-      hasToken: !!session.access_token,
-      tokenLength: session.access_token.length
-    });
 
     const credentials = {
       endpoint: POWER_SYNC_URL,
       token: session.access_token,
     };
     
-    console.log('[PowerSync] [fetchCredentials] Returning credentials (endpoint length:', credentials.endpoint.length, ', token length:', credentials.token.length, ')');
     return credentials;
   }
 
@@ -525,7 +504,6 @@ class SupabaseConnector implements PowerSyncBackendConnector {
         
         await transaction.complete();
       } catch (error) {
-        console.error('[PowerSync] Upload error:', error);
         // Don't throw immediately - allow transaction to complete or rollback properly
         // This prevents leaving connections open
         await transaction.complete().catch(() => {
@@ -609,11 +587,9 @@ export const getPowerSync = (): any => {
       
       initializationPromise = powerSyncInstance.initialize()
         .catch((error) => {
-          console.error('[PowerSync] Initialization failed:', error);
           // Don't throw - allow app to continue even if PowerSync fails
         });
     } catch (error) {
-      console.error('[PowerSync] Failed to create PowerSync instance:', error);
       throw error;
     }
   }
@@ -666,11 +642,9 @@ export const connectPowerSync = async (): Promise<void> => {
       const { initializeAttachmentQueue } = await import('./attachment-queue-init');
       await initializeAttachmentQueue();
     } catch (error) {
-      console.error('[PowerSync] Failed to initialize AttachmentQueue:', error);
       // Don't throw - attachments are optional
     }
   } catch (error: any) {
-    console.error('[PowerSync] Connection failed:', error?.message || error);
     throw error;
   }
 };

@@ -65,7 +65,7 @@ export const syncService = {
         powerSyncQueueCount = stats.count;
         powerSyncQueueSize = stats.size;
       } catch (error) {
-        console.log('[SyncService] Failed to get PowerSync queue stats:', error);
+        // Failed to get PowerSync queue stats
       }
 
       return {
@@ -77,7 +77,6 @@ export const syncService = {
         powerSyncQueueSize,
       };
     } catch (error: any) {
-      console.error('[SyncService] Error getting sync status:', error);
       throw new Error(`Failed to get sync status: ${error.message}`);
     }
   },
@@ -124,7 +123,6 @@ export const syncService = {
         timestamp: att.timestamp,
       }));
     } catch (error: any) {
-      console.error('[SyncService] Error getting pending attachments:', error);
       throw new Error(`Failed to get pending attachments: ${error.message}`);
     }
   },
@@ -150,9 +148,7 @@ export const syncService = {
       );
 
       // The AttachmentQueue watch queries will pick this up and trigger sync
-      console.log('[SyncService] Forced sync - reset pending attachments to QUEUED_SYNC');
     } catch (error: any) {
-      console.error('[SyncService] Error forcing sync:', error);
       throw new Error(`Failed to force sync: ${error.message}`);
     }
   },

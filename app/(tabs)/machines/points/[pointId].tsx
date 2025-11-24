@@ -48,8 +48,8 @@ export default function PointDetailScreen() {
       <View style={styles.header}>
         <Text style={styles.name}>{point.name}</Text>
         {asset && (
-          <TouchableOpacity onPress={() => router.push(`/assets/${asset.id}`)}>
-            <Text style={styles.assetLink}>Asset: {asset.name}</Text>
+          <TouchableOpacity onPress={() => router.push(`/machines/${asset.id}`)}>
+            <Text style={styles.assetLink}>Machine: {asset.name}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -101,7 +101,7 @@ export default function PointDetailScreen() {
       <View style={styles.actions}>
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => router.push(`/assets/points/${pointId}/edit?assetId=${assetId}`)}
+          onPress={() => router.push(`/machines/points/${pointId}/edit?assetId=${assetId}`)}
         >
           <Text style={styles.actionButtonText}>Edit</Text>
         </TouchableOpacity>
@@ -114,7 +114,7 @@ export default function PointDetailScreen() {
                 await imageService.uploadImage(result.assets[0].uri, 'point', pointId!, point.site_id);
               }
             } catch (error) {
-              console.error('Error picking image:', error);
+              // Error picking image
             }
           }}
         >
@@ -140,7 +140,7 @@ export default function PointDetailScreen() {
               }
               setCameraVisible(false);
             } catch (error) {
-              console.error('Error uploading images:', error);
+              // Error uploading images
               // Only show error if it's not a network/offline error
               // Network errors are expected when offline - images are queued and will upload when back online
               if (!isNetworkError(error)) {

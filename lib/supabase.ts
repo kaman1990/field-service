@@ -20,16 +20,17 @@ const clientOptions: any = {
 };
 
 // Only add keepalive on web platform (not supported in React Native)
-if (Platform.OS === 'web') {
-  clientOptions.global = {
-    fetch: (url: string, options: any = {}) => {
-      return fetch(url, {
-        ...options,
-        keepalive: true, // Helps reuse HTTP connections on web
-      });
-    },
-  };
-}
+// NOTE: keepalive might cause issues with large file uploads, so we'll skip it for now
+// if (Platform.OS === 'web') {
+//   clientOptions.global = {
+//     fetch: (url: string, options: any = {}) => {
+//       return fetch(url, {
+//         ...options,
+//         keepalive: true, // Helps reuse HTTP connections on web
+//       });
+//     },
+//   };
+// }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, clientOptions);
 

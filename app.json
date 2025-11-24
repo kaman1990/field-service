@@ -15,7 +15,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.field.assetmanagement"
+      "bundleIdentifier": "com.field.assetmanagement",
+      "jsEngine": "jsc"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,17 +25,26 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.field.assetmanagement"
+      "package": "com.field.assetmanagement",
+      "jsEngine": "jsc",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "output": "single",
-      "display": "standalone"
+      "display": "standalone",
+      "bundler": "metro"
     },
     "extra": {
       "supabaseUrl": "https://xlqljnrvgvsznjbulucw.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhscWxqbnJ2Z3Zzem5qYnVsdWN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzA0MTUzMDIsImV4cCI6MjA0NTk5MTMwMn0.V9mhv_qIZUnb0o4Kkrnumg_R-j5XI2WQVUXVfj2YMw0",
-      "powersyncUrl": "https://6918f9a1af0dc7f759728c53.powersync.journeyapps.com",
+      "powersyncUrl1": "https://6918f9a1af0dc7f759728c53.powersync.journeyapps.com",
+      "powersyncUrl": "https://powersync-service-production-57a8.up.railway.app",
       "router": {},
       "eas": {
         "projectId": "67a109af-5257-4fa4-924d-1dada4342ada"
@@ -51,6 +61,12 @@
         }
       ]
     ],
-    "owner": "kaman1990"
+    "owner": "kaman1990",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/67a109af-5257-4fa4-924d-1dada4342ada"
+    }
   }
 }

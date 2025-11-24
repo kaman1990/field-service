@@ -5,6 +5,8 @@ import { Alert, Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { getAttachmentQueue } from '../lib/attachment-queue-init';
 import { isNetworkError } from '../lib/error-utils';
+import { AttachmentState } from '@powersync/attachments';
+import { generateThumbnail, getThumbnailUri, deleteThumbnail } from '../lib/image-thumbnail';
 
 const powerSync = getPowerSync();
 
@@ -98,7 +100,6 @@ export const imageService = {
           );
         }
       } catch (error) {
-        console.error('Error capturing image:', error);
         Alert.alert('Error', 'Failed to capture image. Please try again.');
       }
     };
@@ -129,7 +130,6 @@ export const imageService = {
                 });
                 resolve(result);
               } catch (error) {
-                console.error('Error capturing image:', error);
                 resolve({ canceled: true, assets: null });
               }
             },
@@ -152,7 +152,6 @@ export const imageService = {
                 });
                 resolve(result);
               } catch (error) {
-                console.error('Error picking image:', error);
                 resolve({ canceled: true, assets: null });
               }
             },
@@ -175,8 +174,6 @@ export const imageService = {
     siteId?: string
   ): Promise<Image> {
     try {
-      console.log(`[ImageService] Starting upload for URI: ${uri.substring(0, 100)}...`);
-      
       const powerSync = await getInitializedPowerSync();
       const attachmentQueue = getAttachmentQueue();
       
@@ -213,7 +210,6 @@ export const imageService = {
         }
         
         base64Data = base64Part;
-        console.log(`[ImageService] Extracted base64 data from data URI (${extension})`);
       } else {
         // Handle file URI - only on native platforms
         if (Platform.OS === 'web') {
@@ -273,9 +269,7 @@ export const imageService = {
               throw new Error('Failed to copy image file to permanent location');
             }
             finalUri = permanentUri;
-            console.log(`[ImageService] Copied temporary file to permanent location: ${permanentUri}`);
           } catch (copyError: any) {
-            console.log(`[ImageService] Failed to copy file, using original URI: ${copyError.message}`);
             // Continue with original URI if copy fails
             finalUri = normalizedUri;
           }
@@ -308,7 +302,6 @@ export const imageService = {
         const uriExtension = uriPath.split('.').pop()?.toLowerCase();
         if (uriExtension && ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(uriExtension)) {
           extension = uriExtension === 'jpeg' ? 'jpg' : uriExtension;
-          console.log(`[ImageService] Detected extension from URI: ${extension}`);
         } else {
           // Method 2: Detect from base64 data signature
           // PNG signature starts with: iVBORw0KGgo (base64 of PNG header)
@@ -316,12 +309,8 @@ export const imageService = {
           const base64Start = base64Data.substring(0, 20);
           if (base64Start.startsWith('iVBORw0KGgo')) {
             extension = 'png';
-            console.log(`[ImageService] Detected PNG from base64 signature`);
           } else if (base64Start.startsWith('/9j/')) {
             extension = 'jpg';
-            console.log(`[ImageService] Detected JPEG from base64 signature`);
-          } else {
-            console.log(`[ImageService] Could not detect image type from URI or signature, defaulting to jpg. URI: ${uri.substring(0, 50)}...`);
           }
         }
       }
@@ -348,25 +337,17 @@ export const imageService = {
       });
 
       // Create attachment record and save to queue
-      // The attachment queue will handle uploads when online, preserving offline capability
+      // PowerSync's attachment queue will automatically handle uploads
       const attachmentRecord = await attachmentQueue.newAttachmentRecord({
         id: attachmentId,
         filename,
         media_type: mediaType,
         size: fileSize,
         local_uri: localFilePathSuffix,
+        state: AttachmentState.QUEUED_UPLOAD,
       });
 
       await attachmentQueue.saveToQueue(attachmentRecord);
-      console.log(`[ImageService] Created attachment record: ${attachmentId} (${filename}), state: ${attachmentRecord.state}`);
-
-      // Verify the record was saved correctly
-      const savedRecord = await (attachmentQueue as any).record(attachmentId);
-      if (savedRecord) {
-        console.log(`[ImageService] Verified attachment record saved: ${savedRecord.id}, state: ${savedRecord.state}, filename: ${savedRecord.filename}`);
-      } else {
-        console.log(`[ImageService] WARNING: Attachment record ${attachmentId} not found after save!`);
-      }
 
       // Construct Supabase Storage URL
       const { supabase } = require('../lib/supabase');
@@ -385,7 +366,8 @@ export const imageService = {
         gateway: 'gateway_id',
       };
 
-      // Store the filename (with extension) in image_id so we can use it directly without querying attachments
+      // Store the storage path in image_id (full path including resized/ prefix if applicable)
+      // For now, storing just the filename; can be updated to include full path (e.g., "resized/filename_w250") if resized version exists
       await powerSync.execute(
         `INSERT INTO images (id, image_id, image_url, ${columnMap[entityType]}, site_id, enabled, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -404,12 +386,34 @@ export const imageService = {
 
       return image;
     } catch (error: any) {
-      console.error('[ImageService] Upload error:', error);
       throw new Error(`Failed to upload image: ${error.message}`);
     }
   },
 
   async deleteImage(id: string): Promise<void> {
+    // Get image record to find filename for thumbnail cleanup
+    const image = await powerSync.get<Image>(
+      'SELECT * FROM images WHERE id = ?',
+      [id]
+    );
+    
+    // Delete thumbnail if image_id exists
+    if (image?.image_id) {
+      let filename = image.image_id;
+      // Extract filename (remove path prefix and suffix if present)
+      if (filename.includes('/')) {
+        filename = filename.split('/').pop() || filename;
+      }
+      if (filename.includes('_w250')) {
+        filename = filename.replace('_w250', '');
+      }
+      // Ensure filename has an extension (default to .jpg if missing)
+      if (!filename.includes('.')) {
+        filename = `${filename}.jpg`;
+      }
+      await deleteThumbnail(filename);
+    }
+    
     await powerSync.execute(
       'UPDATE images SET enabled = ? WHERE id = ?',
       [false, id]
@@ -417,26 +421,95 @@ export const imageService = {
   },
 
   /**
-   * Get the image URI for display
-   * image_id now contains the filename (with extension), so we can use it directly
-   * For old images without image_id, falls back to image_url
+   * Get the thumbnail URI for display (150x150)
+   * Checks for existing thumbnail, generates one if needed, falls back to full image
    */
-  async getImageUri(image: Image): Promise<string> {
+  async getThumbnailUri(image: Image): Promise<string> {
     // For images without image_id, use image_url directly (old images)
     if (!image.image_id) {
       if (image.image_url) {
-        console.log(`[ImageService] Using image_url for old image ${image.id} (no image_id)`);
         return image.image_url;
-      }
-      if (image.resized_image_url) {
-        console.log(`[ImageService] Using resized_image_url for old image ${image.id}`);
-        return image.resized_image_url;
       }
       return '';
     }
     
-    // image_id now contains the filename (with extension)
-    const filename = image.image_id;
+    // Extract filename
+    const storagePath = image.image_id;
+    let filename = storagePath;
+    if (storagePath.includes('/')) {
+      filename = storagePath.split('/').pop() || storagePath;
+    }
+    if (filename.includes('_w250')) {
+      filename = filename.replace('_w250', '');
+    }
+    
+    // Ensure filename has an extension (default to .jpg if missing)
+    // This prevents Metro from trying to process UUIDs as asset paths
+    if (!filename.includes('.')) {
+      filename = `${filename}.jpg`;
+    }
+    
+    // Check if thumbnail exists
+    const existingThumbnail = await getThumbnailUri(filename);
+    if (existingThumbnail) {
+      return existingThumbnail;
+    }
+    
+    // Thumbnail doesn't exist, try to generate it
+    // First, get the full image URI
+    const fullImageUri = await this.getImageUri(image, false);
+    if (!fullImageUri) {
+      return '';
+    }
+    
+    // Generate thumbnail from full image
+    const thumbnailUri = await generateThumbnail(fullImageUri, filename);
+    if (thumbnailUri) {
+      return thumbnailUri;
+    }
+    
+    // If thumbnail generation fails, fall back to full image
+    return fullImageUri;
+  },
+
+  /**
+   * Get the image URI for display
+   * image_id now contains the filename (with extension), so we can use it directly
+   * For old images without image_id, falls back to image_url
+   * @param useThumbnail - If true, returns thumbnail URI (default: false for full resolution)
+   */
+  async getImageUri(image: Image, useThumbnail: boolean = false): Promise<string> {
+    // If thumbnail is requested, use getThumbnailUri
+    if (useThumbnail) {
+      return this.getThumbnailUri(image);
+    }
+    // For images without image_id, use image_url directly (old images)
+    if (!image.image_id) {
+      if (image.image_url) {
+        return image.image_url;
+      }
+      return '';
+    }
+    
+    // image_id contains the full storage path (e.g., "resized/filename_w250" or "filename")
+    const storagePath = image.image_id;
+    
+    // Extract filename for attachment lookup (remove path prefix and suffix if present)
+    // e.g., "resized/abc123.jpg_w250" -> "abc123.jpg"
+    let filename = storagePath;
+    if (storagePath.includes('/')) {
+      filename = storagePath.split('/').pop() || storagePath;
+    }
+    // Remove _w250 suffix if present
+    if (filename.includes('_w250')) {
+      filename = filename.replace('_w250', '');
+    }
+    
+    // Ensure filename has an extension (default to .jpg if missing)
+    // This prevents Metro from trying to process UUIDs as asset paths
+    if (!filename.includes('.')) {
+      filename = `${filename}.jpg`;
+    }
     
     // Try local file first (for newly uploaded images that haven't synced yet)
     const attachmentQueue = getAttachmentQueue();
@@ -492,15 +565,12 @@ export const imageService = {
                   
                   // Return data URI
                   const dataUri = `data:${mimeType};base64,${base64Data}`;
-                  console.log(`[ImageService] Using local file (converted to data URI) for image ${image.id}`);
                   return dataUri;
                 } catch (error: any) {
-                  console.warn(`[ImageService] Failed to read local file for image ${image.id}, falling back to cloud URL:`, error);
                   // Fall through to use cloud URL
                 }
               } else {
                 // Native platforms can use file URIs directly
-                console.log(`[ImageService] Using local file for image ${image.id}`);
                 return localUri;
               }
             }
@@ -508,45 +578,24 @@ export const imageService = {
         }
       } catch (error) {
         // Continue to use public URL if local file check fails
-        console.debug(`[ImageService] Local file check failed for image ${image.id}:`, error);
       }
     }
     
-    // Construct Supabase Storage URL using filename from image_id
-    // Use resized version first (images/resized/filename)
+    // Use image_id directly as the storage path (no path construction needed)
     const { supabase } = require('../lib/supabase');
-    const resizedPath = `resized/${filename}`;
-    const { data: resizedData } = supabase.storage
+    const { data: urlData } = supabase.storage
       .from('images')
-      .getPublicUrl(resizedPath);
-    if (resizedData?.publicUrl) {
-      console.log(`[ImageService] Using resized Supabase Storage URL for image ${image.id}`);
-      return resizedData.publicUrl;
-    }
-    
-    // Fallback to original if resized doesn't exist
-    const { data: originalData } = supabase.storage
-      .from('images')
-      .getPublicUrl(filename);
-    if (originalData?.publicUrl) {
-      console.log(`[ImageService] Using original Supabase Storage URL for image ${image.id}`);
-      return originalData.publicUrl;
+      .getPublicUrl(storagePath);
+    if (urlData?.publicUrl) {
+      return urlData.publicUrl;
     }
     
     // Fallback to image_url if available
     if (image.image_url) {
-      console.log(`[ImageService] Using image_url for image ${image.id}`);
       return image.image_url;
     }
     
-    // Final fallback to resized_image_url
-    if (image.resized_image_url) {
-      console.log(`[ImageService] Using resized_image_url for image ${image.id}`);
-      return image.resized_image_url;
-    }
-    
     // Last resort - return empty string (will show placeholder)
-    console.log(`[ImageService] No URI found for image ${image.id}, image_id: ${image.image_id}`);
     return '';
   },
 };

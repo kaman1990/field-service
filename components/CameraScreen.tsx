@@ -33,7 +33,6 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
       } catch (error) {
         // If initialization fails, still allow camera to work
         // It will initialize on first use if needed
-        console.log('[CameraScreen] Pre-initialization failed, will initialize on use:', error);
         setCameraReady(true); // Still allow camera to be used
       }
     };
@@ -82,8 +81,6 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         setCapturedPhotos([...capturedPhotos, photo.uri]);
       }
     } catch (error: any) {
-      console.error('Error taking picture:', error);
-      
       // Check if it's a network/initialization error
       const errorMessage = error?.message || error?.toString() || '';
       const isNetworkError = errorMessage.toLowerCase().includes('network') || 

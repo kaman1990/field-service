@@ -21,10 +21,6 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeScanned
     setError(null);
     
     // On web, ensure camera is ready for barcode scanning
-    if (Platform.OS === 'web') {
-      console.log('[BarcodeScanner] Web platform detected, initializing QR code scanner');
-      console.log('[BarcodeScanner] Note: On web, only QR codes are supported');
-    }
   }, []);
 
   if (!permission) {
@@ -51,7 +47,6 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeScanned
 
   const handleBarcodeScanned = ({ data, type }: BarcodeScanningResult) => {
     if (!scanned && data) {
-      console.log('[BarcodeScanner] Barcode scanned:', { data, type, platform: Platform.OS });
       setScanned(true);
       onBarcodeScanned(data);
       onClose();
@@ -59,7 +54,6 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onBarcodeScanned
   };
 
   const handleMountError = (error: any) => {
-    console.error('[BarcodeScanner] Camera mount error:', error);
     setError('Failed to access camera. Please ensure camera permissions are granted.');
   };
 

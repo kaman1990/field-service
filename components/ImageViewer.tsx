@@ -44,19 +44,12 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
   const renderItem = ({ item }: { item: ImageType }) => (
     <View style={styles.imageContainer}>
       <Image
-        source={{ uri: imageUris[item.id] || item.resized_image_url || item.image_url || '' }}
+        source={{ uri: imageUris[item.id] || item.image_url || '' }}
         style={styles.fullImage}
         resizeMode="contain"
         onError={(error) => {
           const errorMessage = error.nativeEvent?.error?.message || error.nativeEvent?.error?.toString() || '';
-          const errorObj = { message: errorMessage };
-          // Only log error if it's not a network/offline error
           // Network errors are expected when offline - images will load when back online
-          if (isNetworkError(errorObj)) {
-            console.debug(`[ImageViewer] Failed to load image ${item.id} (network/offline - will retry when online)`);
-          } else {
-            console.error(`[ImageViewer] Failed to load image ${item.id}:`, error.nativeEvent.error);
-          }
         }}
       />
     </View>

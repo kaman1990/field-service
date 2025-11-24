@@ -51,25 +51,22 @@ export class SupabaseStorageAdapter implements StorageAdapter {
    */
   async uploadFile(filePath: string, data: ArrayBuffer, options?: { mediaType?: string }): Promise<void> {
     try {
-      // Check if we have network connectivity before attempting upload
-      // If offline, throw an error that will be caught and retried later
-      const { data: testData, error: testError } = await supabase.storage
-        .from(STORAGE_BUCKET)
-        .list('', { limit: 1 });
+      const contentType = options?.mediaType || 'application/octet-stream';
       
-      // If we can't even list (network error), we're offline
-      if (testError && (testError.message.includes('network') || testError.message.includes('fetch') || testError.message.includes('Failed to fetch'))) {
-        throw new Error(`Network error: ${testError.message}`);
-      }
-
-      const { error } = await supabase.storage
+      // IMPORTANT: Check browser DevTools → Network tab to see the actual request
+      // Look for a request to /storage/v1/object/images/{filename}
+      // Check if it's a CORS error, 401 (auth), 403 (permissions), or something else
+      
+      // Direct upload
+      const { data: uploadData, error } = await supabase.storage
         .from(STORAGE_BUCKET)
         .upload(filePath, data, {
-          contentType: options?.mediaType || 'application/octet-stream',
+          contentType: contentType,
           upsert: true, // Overwrite if exists
         });
 
       if (error) {
+
         // Don't treat "duplicate" as success when we're actually trying to upload
         // Only mark as duplicate if the error specifically says the file exists
         if (error.message && error.message.toLowerCase().includes('already exists')) {
@@ -80,14 +77,6 @@ export class SupabaseStorageAdapter implements StorageAdapter {
         throw new Error(`Failed to upload file to Supabase Storage: ${error.message}`);
       }
     } catch (error: any) {
-      // Only log as error if it's not a network/offline error
-      // Network errors are expected when offline - attachments are queued and will upload when back online
-      if (isNetworkError(error)) {
-        // Log network errors at debug level instead of error level
-        console.debug('[StorageAdapter] Upload error (network/offline - will retry when online):', error);
-      } else {
-        console.error('[StorageAdapter] Upload error:', error);
-      }
       // Re-throw with the original error structure if it's a duplicate
       if (error.error === 'Duplicate') {
         throw error;
@@ -112,13 +101,7 @@ export class SupabaseStorageAdapter implements StorageAdapter {
           .download(path);
 
         if (!downloadError && data) {
-          console.log(`[StorageAdapter] Successfully downloaded via authenticated method: ${path} (${data.size} bytes)`);
           return data;
-        }
-
-        // Log the error for debugging (but don't fail yet - try public URL)
-        if (downloadError) {
-          console.debug(`[StorageAdapter] Authenticated download failed for ${path}: ${downloadError.message}`);
         }
 
         // If authenticated download fails, try public URL
@@ -127,7 +110,6 @@ export class SupabaseStorageAdapter implements StorageAdapter {
           .getPublicUrl(path);
         
         if (!urlData?.publicUrl) {
-          console.debug(`[StorageAdapter] Could not get public URL for ${path}`);
           return null;
         }
 
@@ -136,69 +118,26 @@ export class SupabaseStorageAdapter implements StorageAdapter {
         
         if (response.ok) {
           const blob = await response.blob();
-          console.log(`[StorageAdapter] Successfully downloaded from public URL: ${path} (${blob.size} bytes)`);
           return blob;
         }
         
-        console.debug(`[StorageAdapter] Public URL fetch failed for ${path}: ${response.status} ${response.statusText}`);
         return null;
       } catch (error: any) {
-        console.debug(`[StorageAdapter] Exception while trying to download ${path}:`, error?.message || error);
         return null;
       }
     };
 
     try {
-      // Build list of paths to try in parallel (ordered by preference)
-      // Since image_id contains the filename with extension, we know the exact format
-      // and don't need to try alternative extensions
-      const pathsToTry: string[] = [
-        `resized/${filePath}`, // Try resized version first (most common case)
-        filePath, // Try original file path
-      ];
-
-      console.log(`[StorageAdapter] Attempting to download: ${filePath} (trying ${pathsToTry.length} paths)`);
-
-      // Try all paths in parallel and return the first successful result
-      // We prioritize by order: resized first, then original
-      const downloadPromises = pathsToTry.map((path, index) => 
-        tryDownload(path).then(blob => ({ path, blob, priority: index }))
-      );
-
-      // Race all downloads - return as soon as any succeeds
-      // But we need to check priority to ensure we prefer resized over alternatives
-      const results = await Promise.allSettled(downloadPromises);
-      
-      // Find successful downloads and return the one with highest priority (lowest index)
-      const successful: Array<{ path: string; blob: Blob; priority: number }> = [];
-      const failed: Array<{ path: string; reason?: string }> = [];
-      
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        const path = pathsToTry[i];
-        
-        if (result.status === 'fulfilled' && result.value.blob) {
-          successful.push(result.value);
-        } else {
-          failed.push({ 
-            path,
-            reason: result.status === 'rejected' ? result.reason?.message : 'No blob returned'
-          });
-        }
+      // filePath is the full storage path from image_id (e.g., "resized/filename_w250" or "filename")
+      // Use it directly without any path construction
+      const blob = await tryDownload(filePath);
+      if (blob) {
+        return blob;
       }
 
-      if (successful.length > 0) {
-        // Sort by priority and return the best match
-        successful.sort((a, b) => a.priority - b.priority);
-        console.log(`[StorageAdapter] Successfully downloaded ${filePath} from: ${successful[0].path}`);
-        return successful[0].blob;
-      }
-
-      // If all attempts fail, throw error with details
-      const failedPaths = failed.map(f => `${f.path}${f.reason ? ` (${f.reason})` : ''}`).join(', ');
-      throw new Error(`Failed to download file from Supabase Storage: ${filePath}. Tried: ${failedPaths}`);
+      // If download fails, throw error
+      throw new Error(`Failed to download file from Supabase Storage: ${filePath}`);
     } catch (error: any) {
-      console.error('[StorageAdapter] Download error:', error);
       throw error;
     }
   }
@@ -225,10 +164,7 @@ export class SupabaseStorageAdapter implements StorageAdapter {
           request.onsuccess = () => resolve();
           request.onerror = () => reject(request.error);
         });
-        
-        console.log(`[StorageAdapter] Stored file in IndexedDB: ${fileUri}`);
       } catch (error: any) {
-        console.error('[StorageAdapter] Failed to store file in IndexedDB:', error);
         throw new Error(`Failed to store file in IndexedDB: ${error.message}`);
       }
       return;
@@ -250,7 +186,6 @@ export class SupabaseStorageAdapter implements StorageAdapter {
         encoding: isBase64 ? FileSystem.EncodingType.Base64 : FileSystem.EncodingType.UTF8,
       });
     } catch (error: any) {
-      console.error('[StorageAdapter] Write file error:', error);
       throw error;
     }
   }
@@ -295,7 +230,6 @@ export class SupabaseStorageAdapter implements StorageAdapter {
           return encoder.encode(base64Data).buffer;
         }
       } catch (error: any) {
-        console.error('[StorageAdapter] Failed to read file from IndexedDB:', error);
         throw new Error(`File does not exist in IndexedDB: ${fileUri}`);
       }
     }
@@ -330,7 +264,6 @@ export class SupabaseStorageAdapter implements StorageAdapter {
         return encoder.encode(content).buffer;
       }
     } catch (error: any) {
-      console.error('[StorageAdapter] Read file error:', error);
       throw error;
     }
   }
@@ -353,7 +286,6 @@ export class SupabaseStorageAdapter implements StorageAdapter {
             request.onerror = () => reject(request.error);
           });
         } catch (error: any) {
-          console.error('[StorageAdapter] Failed to delete file from IndexedDB:', error);
           // Don't throw - continue with cloud deletion
         }
       } else {
@@ -363,19 +295,9 @@ export class SupabaseStorageAdapter implements StorageAdapter {
         }
       }
 
-      // Delete from Supabase Storage if filename is provided
-      if (options?.filename) {
-        const { error } = await supabase.storage
-          .from(STORAGE_BUCKET)
-          .remove([options.filename]);
-
-        if (error) {
-          console.log('[StorageAdapter] Failed to delete file from Supabase Storage:', error);
-          // Don't throw - local deletion succeeded
-        }
-      }
+      // Intentionally avoid deleting from Supabase Storage to prevent data loss.
+      // Remote cleanup must be handled server-side or via explicit tooling.
     } catch (error: any) {
-      console.error('[StorageAdapter] Delete file error:', error);
       throw error;
     }
   }
@@ -407,7 +329,6 @@ export class SupabaseStorageAdapter implements StorageAdapter {
       const fileInfo = await FileSystem.getInfoAsync(fileUri);
       return fileInfo.exists;
     } catch (error: any) {
-      console.error('[StorageAdapter] File exists check error:', error);
       return false;
     }
   }
@@ -429,7 +350,6 @@ export class SupabaseStorageAdapter implements StorageAdapter {
         await FileSystem.makeDirectoryAsync(uri, { intermediates: true });
       }
     } catch (error: any) {
-      console.error('[StorageAdapter] Make dir error:', error);
       throw error;
     }
   }
@@ -447,7 +367,6 @@ export class SupabaseStorageAdapter implements StorageAdapter {
         const base64Data = btoa(String.fromCharCode(...new Uint8Array(sourceData)));
         await this.writeFile(targetUri, base64Data);
       } catch (error: any) {
-        console.error('[StorageAdapter] Copy file error:', error);
         throw error;
       }
       return;
@@ -467,7 +386,6 @@ export class SupabaseStorageAdapter implements StorageAdapter {
         to: targetUri,
       });
     } catch (error: any) {
-      console.error('[StorageAdapter] Copy file error:', error);
       throw error;
     }
   }

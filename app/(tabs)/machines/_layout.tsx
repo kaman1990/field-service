@@ -1,23 +1,23 @@
 import { Stack } from 'expo-router';
 
-export default function AssetsLayout() {
+export default function MachinesLayout() {
   return (
     <Stack>
       <Stack.Screen
         name="index"
-        options={{ title: 'Assets' }}
+        options={{ title: 'Machines' }}
       />
       <Stack.Screen
         name="[assetId]"
-        options={{ title: 'Asset Details' }}
+        options={{ title: 'Machine Details' }}
       />
       <Stack.Screen
         name="[assetId]/edit"
-        options={{ title: 'Edit Asset' }}
+        options={{ title: 'Edit Machine' }}
       />
       <Stack.Screen
         name="new"
-        options={{ title: 'New Asset' }}
+        options={{ title: 'New Machine' }}
       />
       <Stack.Screen
         name="points/index"
@@ -38,3 +38,4 @@ export default function AssetsLayout() {
     </Stack>
   );
 }
+

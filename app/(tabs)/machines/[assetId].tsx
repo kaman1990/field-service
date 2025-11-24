@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, Alert, TextInput } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useNavigation, useSegments } from 'expo-router';
 import { useQuery as useReactQuery, useQueryClient } from '@tanstack/react-query';
 import { useQuery } from '@powersync/react';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,12 +14,34 @@ import { isNetworkError } from '../../../lib/error-utils';
 import { pointService } from '../../../services/points';
 import { buildImagesQuery, buildPointsQuery, getTableName } from '../../../lib/powersync-queries';
 import { lookupService } from '../../../services/lookups';
-import type { Asset, Image as ImageType, Point, PointIotStatus } from '../../../types/database';
+import type { Asset, Image as ImageType, Point, PointIotStatus, AssetIotStatus } from '../../../types/database';
+import { assetService } from '../../../services/assets';
 
 export default function AssetDetailScreen() {
-  const { assetId } = useLocalSearchParams<{ assetId: string }>();
+  const { assetId, fromGatewayId } = useLocalSearchParams<{ assetId: string; fromGatewayId?: string }>();
   const router = useRouter();
+  const navigation = useNavigation();
+  const segments = useSegments();
   const queryClient = useQueryClient();
+  
+  // Handle back navigation when coming from gateway detail page
+  // Only apply if we have fromGatewayId (meaning we came directly from gateway)
+  useEffect(() => {
+    if (fromGatewayId) {
+      // Override the back button behavior
+      const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+        // Only handle back navigation if we still have fromGatewayId
+        // This will only be true if we came directly from gateway
+        // When navigating from assets list, fromGatewayId won't be in the URL
+        if (e.data.action.type === 'GO_BACK' && fromGatewayId) {
+          e.preventDefault();
+          router.push(`/gateways/${fromGatewayId}`);
+        }
+      });
+
+      return unsubscribe;
+    }
+  }, [fromGatewayId, navigation, router]);
   const [cameraVisible, setCameraVisible] = useState(false);
   const [pointCameraVisible, setPointCameraVisible] = useState<string | null>(null);
   const [pointScannerVisible, setPointScannerVisible] = useState<string | null>(null);
@@ -50,6 +72,11 @@ export default function AssetDetailScreen() {
     queryFn: () => lookupService.getPointIotStatuses(),
   });
 
+  const { data: assetIotStatuses = [] } = useReactQuery<AssetIotStatus[]>({
+    queryKey: ['assetIotStatuses'],
+    queryFn: () => lookupService.getAssetIotStatuses(),
+  });
+
   const statusMap = useMemo(() => {
     const map = new Map<string, string>();
     iotStatuses.forEach((status) => {
@@ -60,19 +87,95 @@ export default function AssetDetailScreen() {
     return map;
   }, [iotStatuses]);
 
-  // Find IoT status IDs for "not required" and "not installed"
+  // Find point IoT status IDs by code
   const notRequiredStatusId = useMemo(() => {
-    const status = iotStatuses.find(s => s.status?.toLowerCase().includes('not required'));
+    const status = iotStatuses.find(s => s.code === 'NOT_REQUIRED');
     return status?.id || null;
   }, [iotStatuses]);
 
   const notInstalledStatusId = useMemo(() => {
-    const status = iotStatuses.find(s => s.status?.toLowerCase().includes('not installed'));
+    const status = iotStatuses.find(s => s.code === 'NOT_INSTALLED');
     return status?.id || null;
   }, [iotStatuses]);
 
+  const notMappedStatusId = useMemo(() => {
+    const status = iotStatuses.find(s => s.code === 'NOT_MAPPED');
+    return status?.id || null;
+  }, [iotStatuses]);
+
+  const missingImageStatusId = useMemo(() => {
+    const status = iotStatuses.find(s => s.code === 'MISSING_IMAGE');
+    return status?.id || null;
+  }, [iotStatuses]);
+
+  const installedStatusId = useMemo(() => {
+    const status = iotStatuses.find(s => s.code === 'INSTALLED');
+    return status?.id || null;
+  }, [iotStatuses]);
+
+  const communicatingStatusId = useMemo(() => {
+    const status = iotStatuses.find(s => s.code === 'COMMUNICATING');
+    return status?.id || null;
+  }, [iotStatuses]);
+
+  // Find asset IoT status IDs by code
+  const assetNotRequiredStatusId = useMemo(() => {
+    const status = assetIotStatuses.find(s => s.code === 'NOT_REQUIRED');
+    return status?.id || null;
+  }, [assetIotStatuses]);
+
+  const assetNotInstalledStatusId = useMemo(() => {
+    const status = assetIotStatuses.find(s => s.code === 'NOT_INSTALLED');
+    return status?.id || null;
+  }, [assetIotStatuses]);
+
+  const assetNotMappedStatusId = useMemo(() => {
+    const status = assetIotStatuses.find(s => s.code === 'NOT_MAPPED');
+    return status?.id || null;
+  }, [assetIotStatuses]);
+
+  const assetMissingImageStatusId = useMemo(() => {
+    const status = assetIotStatuses.find(s => s.code === 'MISSING_IMAGE');
+    return status?.id || null;
+  }, [assetIotStatuses]);
+
+  const assetPartiallyInstalledStatusId = useMemo(() => {
+    const status = assetIotStatuses.find(s => s.code === 'PARTIALLY_INSTALLED');
+    return status?.id || null;
+  }, [assetIotStatuses]);
+
+  const assetInstalledStatusId = useMemo(() => {
+    const status = assetIotStatuses.find(s => s.code === 'INSTALLED');
+    return status?.id || null;
+  }, [assetIotStatuses]);
+
+  const assetCommunicatingStatusId = useMemo(() => {
+    const status = assetIotStatuses.find(s => s.code === 'COMMUNICATING');
+    return status?.id || null;
+  }, [assetIotStatuses]);
+
   const { sql: pointsSql, params: pointsParams } = buildPointsQuery(assetId!);
   const { data: pointsData = [] } = useQuery<Point>(pointsSql, pointsParams);
+
+  // Query all point images for this asset
+  const imagesTable = getTableName('images');
+  const { data: allPointImages = [] } = useQuery<ImageType>(
+    `SELECT * FROM ${imagesTable} WHERE point_id IN (SELECT id FROM ${getTableName('points')} WHERE asset_id = ? AND enabled = ?) AND enabled = ?`,
+    [assetId, true, true]
+  );
+
+  // Group images by point_id
+  const imagesByPointId = useMemo(() => {
+    const map = new Map<string, ImageType[]>();
+    allPointImages.forEach((image) => {
+      if (image.point_id) {
+        const existing = map.get(image.point_id) || [];
+        existing.push(image);
+        map.set(image.point_id, existing);
+      }
+    });
+    return map;
+  }, [allPointImages]);
 
   // Sort points in machine direction order: Motor NDE, Motor DE, GB DE, GB NDE, Equipment DE, Equipment NDE
   const points = useMemo(() => {
@@ -135,6 +238,170 @@ export default function AssetDetailScreen() {
     return sorted;
   }, [pointsData]);
 
+  // Function to calculate and update asset status based on points
+  const updateAssetStatus = useCallback(async () => {
+    if (!asset || !assetId) return;
+    
+    // Respect manual asset statuses - don't update if set to NOT_REQUIRED or NOT_INSTALLED
+    if (asset.iot_status_id === assetNotRequiredStatusId || asset.iot_status_id === assetNotInstalledStatusId) {
+      return;
+    }
+
+    // Need all status IDs to calculate
+    if (!assetNotMappedStatusId || !assetMissingImageStatusId || !assetPartiallyInstalledStatusId || 
+        !assetInstalledStatusId || !assetCommunicatingStatusId ||
+        !notRequiredStatusId || !notInstalledStatusId || !notMappedStatusId || 
+        !installedStatusId || !communicatingStatusId) {
+      return;
+    }
+
+    // Count eligible points (enabled and not NOT_REQUIRED or NOT_INSTALLED)
+    let v_nm_cnt = 0; // NOT_MAPPED count
+    let v_i_cnt = 0;  // INSTALLED count
+    let v_c_cnt = 0;  // COMMUNICATING count
+    let eligiblePointCount = 0; // Total eligible points
+
+    pointsData.forEach((point) => {
+      if (!point.enabled) return;
+      if (point.iot_status_id === notRequiredStatusId || point.iot_status_id === notInstalledStatusId) {
+        return; // Skip NOT_REQUIRED and NOT_INSTALLED points
+      }
+
+      eligiblePointCount++; // Count this as an eligible point
+
+      if (point.iot_status_id === notMappedStatusId) {
+        v_nm_cnt++;
+      } else if (point.iot_status_id === installedStatusId) {
+        v_i_cnt++;
+      } else if (point.iot_status_id === communicatingStatusId) {
+        v_c_cnt++;
+      }
+    });
+
+    // Count asset images
+    const v_img_cnt = images.length;
+
+    // Calculate new status based on precedence
+    let v_new: string | null = null;
+
+    if (v_nm_cnt === 0 && v_i_cnt === 0 && v_c_cnt > 0) {
+      // All eligible points are COMMUNICATING
+      if (v_c_cnt === eligiblePointCount) {
+        v_new = assetCommunicatingStatusId;
+      } else {
+        // Some points are COMMUNICATING but not all - treat as PARTIALLY_INSTALLED
+        v_new = assetPartiallyInstalledStatusId;
+      }
+    } else if (v_nm_cnt === 0 && v_i_cnt > 0 && v_c_cnt === 0) {
+      // All eligible points must be INSTALLED for asset to be INSTALLED
+      if (v_i_cnt === eligiblePointCount) {
+        if (v_img_cnt === 0) {
+          v_new = assetMissingImageStatusId;
+        } else {
+          v_new = assetInstalledStatusId;
+        }
+      } else {
+        // Some points are INSTALLED but not all - treat as PARTIALLY_INSTALLED
+        v_new = assetPartiallyInstalledStatusId;
+      }
+    } else if (v_i_cnt > 0 && v_nm_cnt > 0) {
+      v_new = assetPartiallyInstalledStatusId;
+    } else {
+      v_new = assetNotMappedStatusId;
+    }
+
+    // Update if status doesn't match expected status
+    if (v_new && asset.iot_status_id !== v_new) {
+      try {
+        await assetService.updateAsset(assetId, { iot_status_id: v_new });
+        queryClient.invalidateQueries({ queryKey: ['assets'] });
+      } catch (error) {
+        // Error updating asset status
+      }
+    }
+  }, [
+    asset, assetId, pointsData, images.length,
+    assetNotRequiredStatusId, assetNotInstalledStatusId, assetNotMappedStatusId,
+    assetMissingImageStatusId, assetPartiallyInstalledStatusId, assetInstalledStatusId,
+    assetCommunicatingStatusId, notRequiredStatusId, notInstalledStatusId,
+    notMappedStatusId, installedStatusId, communicatingStatusId, queryClient
+  ]);
+
+  // Function to calculate and update status for a specific point
+  const updatePointStatus = useCallback(async (pointId: string) => {
+    if (!notMappedStatusId || !missingImageStatusId || !installedStatusId) {
+      return;
+    }
+
+    const point = pointsData.find(p => p.id === pointId);
+    if (!point) return;
+
+    // Skip if status is manually set to "Not Required" or "Not Installed"
+    if (point.iot_status_id === notRequiredStatusId || point.iot_status_id === notInstalledStatusId) {
+      return;
+    }
+
+    // Check if point has serial number (full_serial_no or serial_no)
+    const hasSerial = !!(point.full_serial_no && point.full_serial_no !== '');
+    
+    // Check if point has images
+    const pointImages = imagesByPointId.get(point.id) || [];
+    const hasImages = pointImages.length > 0;
+
+    // Calculate expected status
+    let expectedStatusId: string | null = null;
+    if (!hasSerial) {
+      expectedStatusId = notMappedStatusId;
+    } else if (!hasImages) {
+      expectedStatusId = missingImageStatusId;
+    } else {
+      expectedStatusId = installedStatusId;
+    }
+
+    // Update if status doesn't match expected status
+    if (expectedStatusId && point.iot_status_id !== expectedStatusId) {
+      try {
+        await pointService.updatePoint(point.id, { iot_status_id: expectedStatusId });
+        queryClient.invalidateQueries({ queryKey: ['points'] });
+        // Update asset status after point status changes
+        setTimeout(() => {
+          updateAssetStatus();
+        }, 500);
+      } catch (error) {
+        // Error updating point status
+      }
+    }
+  }, [pointsData, imagesByPointId, notMappedStatusId, missingImageStatusId, installedStatusId, notRequiredStatusId, notInstalledStatusId, queryClient, updateAssetStatus]);
+
+  // Only run on initial load to set statuses for existing points
+  useEffect(() => {
+    if (!pointsData.length || !notMappedStatusId || !missingImageStatusId || !installedStatusId) {
+      return;
+    }
+
+    // Process all points once on initial load
+    const timeoutId = setTimeout(() => {
+      pointsData.forEach((point) => {
+        updatePointStatus(point.id);
+      });
+      // Update asset status after processing all points
+      updateAssetStatus();
+    }, 1000); // Small delay to ensure images are loaded
+
+    return () => clearTimeout(timeoutId);
+  }, [assetId, updatePointStatus, updateAssetStatus]); // Only run when assetId changes (initial load)
+
+  // Update asset status when points or images change (debounced)
+  useEffect(() => {
+    if (!pointsData.length || !asset) return;
+
+    const timeoutId = setTimeout(() => {
+      updateAssetStatus();
+    }, 1000); // Debounce to avoid excessive updates
+
+    return () => clearTimeout(timeoutId);
+  }, [pointsData.length, images.length, updateAssetStatus, asset]);
+
   const handleLongPress = (pointId: string) => {
     setContextMenuPointId(pointId);
   };
@@ -166,7 +433,6 @@ export default function AssetDetailScreen() {
       setEditingPointId(null);
       setPendingStatusUpdate(null);
     } catch (error) {
-      console.error('Error updating note:', error);
       Alert.alert('Error', 'Failed to update note. Please try again.');
     }
   };
@@ -185,14 +451,18 @@ export default function AssetDetailScreen() {
       return;
     }
     
-    // If clearing, update immediately without note
+    // If clearing, set to "not mapped" status
     if (isCurrentlyNotRequired) {
+      if (!notMappedStatusId) {
+        Alert.alert('Error', 'Could not find "Not Mapped" status.');
+        setContextMenuPointId(null);
+        return;
+      }
       try {
-        await pointService.updatePoint(contextMenuPointId, { iot_status_id: null });
+        await pointService.updatePoint(contextMenuPointId, { iot_status_id: notMappedStatusId });
         queryClient.invalidateQueries({ queryKey: ['points'] });
         setContextMenuPointId(null);
       } catch (error) {
-        console.error('Error updating status:', error);
         Alert.alert('Error', 'Failed to update status. Please try again.');
       }
       return;
@@ -220,14 +490,18 @@ export default function AssetDetailScreen() {
       return;
     }
     
-    // If clearing, update immediately without note
+    // If clearing, set to "not mapped" status
     if (isCurrentlyNotInstalled) {
+      if (!notMappedStatusId) {
+        Alert.alert('Error', 'Could not find "Not Mapped" status.');
+        setContextMenuPointId(null);
+        return;
+      }
       try {
-        await pointService.updatePoint(contextMenuPointId, { iot_status_id: null });
+        await pointService.updatePoint(contextMenuPointId, { iot_status_id: notMappedStatusId });
         queryClient.invalidateQueries({ queryKey: ['points'] });
         setContextMenuPointId(null);
       } catch (error) {
-        console.error('Error updating status:', error);
         Alert.alert('Error', 'Failed to update status. Please try again.');
       }
       return;
@@ -260,7 +534,6 @@ export default function AssetDetailScreen() {
       setOrientationInput('');
       setEditingPointId(null);
     } catch (error) {
-      console.error('Error updating orientation:', error);
       Alert.alert('Error', 'Failed to update orientation. Please try again.');
     }
   };
@@ -329,7 +602,7 @@ export default function AssetDetailScreen() {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Points ({points.length})</Text>
           <TouchableOpacity
-            onPress={() => router.push(`/assets/points?assetId=${assetId}`)}
+            onPress={() => router.push(`/machines/points?assetId=${assetId}`)}
           >
             <Text style={styles.linkText}>View All</Text>
           </TouchableOpacity>
@@ -344,7 +617,7 @@ export default function AssetDetailScreen() {
                 <View key={point.id} style={styles.pointItem}>
                   <TouchableOpacity
                     style={styles.pointContent}
-                    onPress={() => router.push(`/assets/points/${point.id}?assetId=${assetId}`)}
+                    onPress={() => router.push(`/machines/points/${point.id}?assetId=${assetId}`)}
                     onLongPress={() => handleLongPress(point.id)}
                   >
                     <View style={styles.pointHeader}>
@@ -383,7 +656,7 @@ export default function AssetDetailScreen() {
             {points.length > 6 && (
               <TouchableOpacity
                 style={styles.moreButton}
-                onPress={() => router.push(`/assets/points?assetId=${assetId}`)}
+                onPress={() => router.push(`/machines/points?assetId=${assetId}`)}
               >
                 <Text style={styles.moreButtonText}>+{points.length - 6} more</Text>
               </TouchableOpacity>
@@ -394,7 +667,7 @@ export default function AssetDetailScreen() {
         )}
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => router.push(`/assets/points/new?assetId=${assetId}`)}
+          onPress={() => router.push(`/machines/points/new?assetId=${assetId}`)}
         >
           <Text style={styles.addButtonText}>+ Add Point</Text>
         </TouchableOpacity>
@@ -424,7 +697,7 @@ export default function AssetDetailScreen() {
       <View style={styles.actions}>
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => router.push(`/assets/${assetId}/edit`)}
+          onPress={() => router.push(`/machines/${assetId}/edit`)}
         >
           <Text style={styles.actionButtonText}>Edit</Text>
         </TouchableOpacity>
@@ -437,7 +710,7 @@ export default function AssetDetailScreen() {
                 await imageService.uploadImage(result.assets[0].uri, 'asset', assetId!, asset.site_id);
               }
             } catch (error) {
-              console.error('Error picking image:', error);
+              // Error picking image
             }
           }}
         >
@@ -461,9 +734,12 @@ export default function AssetDetailScreen() {
                   await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
                 }
               }
+              // Update asset status after images are uploaded
+              setTimeout(() => {
+                updateAssetStatus();
+              }, 1000);
               setCameraVisible(false);
             } catch (error) {
-              console.error('Error uploading images:', error);
               // Only show error if it's not a network/offline error
               // Network errors are expected when offline - images are queued and will upload when back online
               if (!isNetworkError(error)) {
@@ -494,10 +770,15 @@ export default function AssetDetailScreen() {
                       await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
                     }
                   }
+                  // Update status after images are uploaded
+                  setTimeout(() => {
+                    updatePointStatus(pointCameraVisible);
+                    // Update asset status after point status changes
+                    updateAssetStatus();
+                  }, 1000); // Delay to ensure images are synced
                 }
                 setPointCameraVisible(null);
               } catch (error) {
-                console.error('Error uploading images:', error);
                 Alert.alert('Error', 'Failed to upload some images. Please try again.');
               }
             }}
@@ -518,6 +799,12 @@ export default function AssetDetailScreen() {
                 await pointService.updatePoint(pointScannerVisible!, { full_serial_no: data });
                 // Invalidate queries to refresh the points list
                 queryClient.invalidateQueries({ queryKey: ['points'] });
+                // Update status after serial number is set
+                setTimeout(() => {
+                  updatePointStatus(pointScannerVisible!);
+                  // Update asset status after point status changes
+                  updateAssetStatus();
+                }, 500);
                 // Close scanner and prompt for orientation
                 setPointScannerVisible(null);
                 setEditingPointId(pointScannerVisible);
@@ -525,7 +812,6 @@ export default function AssetDetailScreen() {
                 setOrientationInput(point?.sensor_orientation || '');
                 setOrientationModalVisible(true);
               } catch (error) {
-                console.error('Error updating point:', error);
                 Alert.alert('Error', 'Failed to update serial number. Please try again.');
               }
             }}
@@ -558,7 +844,7 @@ export default function AssetDetailScreen() {
                     style={styles.contextMenuItem}
                     onPress={() => {
                       setContextMenuPointId(null);
-                      router.push(`/assets/points/${contextMenuPointId}/edit?assetId=${assetId}`);
+                      router.push(`/machines/points/${contextMenuPointId}/edit?assetId=${assetId}`);
                     }}
                   >
                     <Ionicons name="create-outline" size={20} color="#333" />

@@ -20,7 +20,7 @@ export default function Index() {
           router.replace('/sign-in');
         }
       } catch (error) {
-        console.error('[Index] Error checking auth:', error);
+        // Error checking auth
         router.replace('/sign-in');
       }
     };
