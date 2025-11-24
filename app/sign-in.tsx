@@ -13,6 +13,7 @@ import {
 import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { connectPowerSync } from '../lib/powersync';
+import { sanitizeEmail, sanitizeTextInput } from '../lib/sanitize';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -41,7 +42,11 @@ export default function SignInScreen() {
 
     clearFeedback();
 
-    if (!email || !password) {
+    // Sanitize inputs
+    const sanitizedEmail = sanitizeEmail(email);
+    const sanitizedPassword = sanitizeTextInput(password);
+
+    if (!sanitizedEmail || !sanitizedPassword) {
       setFeedbackMessage('error', 'Please enter both email and password');
       return;
     }
@@ -49,8 +54,8 @@ export default function SignInScreen() {
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: sanitizedEmail,
+        password: sanitizedPassword,
       });
 
       if (error) {
@@ -67,7 +72,7 @@ export default function SignInScreen() {
         }
         
         setFeedbackMessage('success', 'Welcome back! Redirecting you now...');
-        router.replace('/(tabs)');
+        router.replace('/(tabs)/dashboard');
       }
     } catch (error: any) {
       setFeedbackMessage(
@@ -86,12 +91,16 @@ export default function SignInScreen() {
 
     clearFeedback();
 
-    if (!email || !password) {
+    // Sanitize inputs
+    const sanitizedEmail = sanitizeEmail(email);
+    const sanitizedPassword = sanitizeTextInput(password);
+
+    if (!sanitizedEmail || !sanitizedPassword) {
       setFeedbackMessage('error', 'Please enter both email and password');
       return;
     }
 
-    if (password.length < 6) {
+    if (sanitizedPassword.length < 6) {
       setFeedbackMessage('error', 'Password must be at least 6 characters');
       return;
     }
@@ -99,8 +108,8 @@ export default function SignInScreen() {
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
+        email: sanitizedEmail,
+        password: sanitizedPassword,
       });
 
       if (error) {

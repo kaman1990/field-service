@@ -32,6 +32,9 @@ export const SimplePicker: React.FC<SimplePickerProps> = ({
       <TouchableOpacity
         style={styles.picker}
         onPress={() => setModalVisible(true)}
+        accessibilityLabel={selectedOption ? `Selected: ${selectedOption.label}` : placeholder}
+        accessibilityRole="button"
+        accessibilityHint="Opens picker to select an option"
       >
         <Text style={[styles.pickerText, !value && styles.placeholder]}>
           {selectedOption ? selectedOption.label : placeholder}
@@ -67,6 +70,9 @@ export const SimplePicker: React.FC<SimplePickerProps> = ({
                   onValueChange(null);
                   setModalVisible(false);
                 }}
+                accessibilityRole="button"
+                accessibilityLabel="None"
+                accessibilityHint="Selects no option"
               >
                 <Text style={styles.optionText}>None</Text>
               </TouchableOpacity>
@@ -78,6 +84,10 @@ export const SimplePicker: React.FC<SimplePickerProps> = ({
                     onValueChange(option.value);
                     setModalVisible(false);
                   }}
+                  accessibilityRole="button"
+                  accessibilityLabel={option.label}
+                  accessibilityHint={value === option.value ? "Currently selected" : "Selects this option"}
+                  accessibilityState={{ selected: value === option.value }}
                 >
                   <Text style={[styles.optionText, value === option.value && styles.optionTextSelected]}>
                     {option.label}

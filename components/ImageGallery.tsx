@@ -11,7 +11,7 @@ interface ImageGalleryProps {
   onImagePress?: (image: ImageType) => void;
 }
 
-export const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onImagePress }) => {
+export const ImageGallery: React.FC<ImageGalleryProps> = React.memo(({ images, onImagePress }) => {
   const [viewerVisible, setViewerVisible] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [imageUris, setImageUris] = useState<Record<string, string>>({});
@@ -241,7 +241,7 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onImagePress
       </Modal>
     </>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

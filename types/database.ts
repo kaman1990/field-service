@@ -46,6 +46,8 @@ export interface Asset {
   updated_at: string;
   created_by?: string;
   updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 
 export interface Point {
@@ -93,6 +95,8 @@ export interface Point {
   updated_at: string;
   created_by?: string;
   updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 
 export interface Gateway {
@@ -128,6 +132,8 @@ export interface Gateway {
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 
 export interface Site {
@@ -135,7 +141,6 @@ export interface Site {
   name?: string;
   description?: string;
   location?: string;
-  company?: string;
   company_id?: string;
   survey_engineers?: string;
   survey_date?: string;
@@ -146,6 +151,8 @@ export interface Site {
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 
 export interface Area {
@@ -161,6 +168,8 @@ export interface Area {
   updated_at: string;
   created_by?: string;
   updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 
 export interface AssetHealthStatus {
@@ -172,6 +181,8 @@ export interface AssetHealthStatus {
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 
 export interface AssetIotStatus {
@@ -184,6 +195,8 @@ export interface AssetIotStatus {
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 
 export interface PointIotStatus {
@@ -196,6 +209,8 @@ export interface PointIotStatus {
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 
 export interface AssetType {
@@ -206,6 +221,8 @@ export interface AssetType {
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 
 export interface GatewayStatus {
@@ -216,6 +233,8 @@ export interface GatewayStatus {
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 
 export interface GatewayIotStatus {
@@ -228,6 +247,8 @@ export interface GatewayIotStatus {
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 
 export interface Image {
@@ -245,6 +266,8 @@ export interface Image {
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 
 export interface AssetAdditionalDetail {
@@ -257,6 +280,8 @@ export interface AssetAdditionalDetail {
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 
 export interface AssetHistory {
@@ -269,6 +294,8 @@ export interface AssetHistory {
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 
 export interface RetoolUser {
@@ -287,5 +314,32 @@ export interface RetoolUser {
   created_by?: string;
   updated_by?: string;
   auth_id?: string;
+  deleted_at?: string;
+  deleted_by?: string;
+}
+
+export interface UserSite {
+  id: string;
+  user_id: string;
+  site_id: string;
+  enabled?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  created_by?: string;
+  updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
+}
+
+export interface Company {
+  id: string;
+  name?: string;
+  enabled?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  created_by?: string;
+  updated_by?: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 

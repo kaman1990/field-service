@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = Platform.OS === 'ios' ? 49 : 56;
+  const totalTabBarHeight = tabBarHeight + insets.bottom;
   
   return (
     <Tabs
@@ -11,6 +13,9 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: '#999',
+        sceneContainerStyle: {
+          paddingBottom: Platform.OS === 'web' ? 64 : totalTabBarHeight,
+        },
         tabBarStyle: Platform.OS === 'web' ? {
           position: 'absolute',
           bottom: 0,
@@ -22,7 +27,7 @@ export default function TabsLayout() {
           left: 0,
           right: 0,
           paddingBottom: insets.bottom,
-          height: (Platform.OS === 'ios' ? 49 : 56) + insets.bottom,
+          height: totalTabBarHeight,
         },
       }}
       initialRouteName="dashboard"

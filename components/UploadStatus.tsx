@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView } from 'react-native';
 import { syncService, type PendingAttachment } from '../services/sync';
 import { getPowerSync, getInitializedPowerSync } from '../lib/powersync';
@@ -11,36 +11,72 @@ interface UploadStatusProps {
 export const UploadStatus: React.FC<UploadStatusProps> = ({ refreshInterval = 2000 }) => {
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [allAttachments, setAllAttachments] = useState<PendingAttachment[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [stateCounts, setStateCounts] = useState<Record<number, number>>({});
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   const loadPendingAttachments = async () => {
     try {
-      setLoading(true);
+      // Only show loading indicator on initial load
+      if (!hasLoadedOnce) {
+        setLoading(true);
+      }
       const attachments = await syncService.getPendingAttachments();
-      
-      // Store all attachments for debug view
-      setAllAttachments(attachments);
       
       // Filter to only show upload-related states
       const uploadAttachments = attachments.filter(
         (att) => att.state === AttachmentState.QUEUED_UPLOAD || att.state === AttachmentState.QUEUED_SYNC
       );
       
-      // Calculate state counts for debug display
-      const counts = attachments.reduce((acc, att) => {
-        acc[att.state] = (acc[att.state] || 0) + 1;
-        return acc;
-      }, {} as Record<number, number>);
-      setStateCounts(counts);
+      // Only update state if values actually changed to prevent unnecessary re-renders
+      setAllAttachments(prev => {
+        // Compare by length and IDs to see if anything changed
+        if (prev.length !== attachments.length) return attachments;
+        const prevIds = new Set(prev.map(a => a.id));
+        const newIds = new Set(attachments.map(a => a.id));
+        if (prevIds.size !== newIds.size) return attachments;
+        for (const id of prevIds) {
+          if (!newIds.has(id)) return attachments;
+        }
+        // If attachments are the same, return previous to prevent re-render
+        return prev;
+      });
       
-      setPendingAttachments(uploadAttachments);
+      setPendingAttachments(prev => {
+        // Compare by length and IDs
+        if (prev.length !== uploadAttachments.length) return uploadAttachments;
+        const prevIds = new Set(prev.map(a => a.id));
+        const newIds = new Set(uploadAttachments.map(a => a.id));
+        if (prevIds.size !== newIds.size) return uploadAttachments;
+        for (const id of prevIds) {
+          if (!newIds.has(id)) return uploadAttachments;
+        }
+        return prev; // Return previous to prevent re-render
+      });
+      
+      // Calculate state counts for debug display
+      setStateCounts(prev => {
+        const counts = attachments.reduce((acc, att) => {
+          acc[att.state] = (acc[att.state] || 0) + 1;
+          return acc;
+        }, {} as Record<number, number>);
+        // Only update if counts changed
+        const prevStr = JSON.stringify(prev);
+        const newStr = JSON.stringify(counts);
+        return prevStr === newStr ? prev : counts;
+      });
+      
+      if (!hasLoadedOnce) {
+        setHasLoadedOnce(true);
+        setLoading(false);
+      }
     } catch (error) {
       // Error loading pending attachments
-    } finally {
-      setLoading(false);
+      if (!hasLoadedOnce) {
+        setLoading(false);
+      }
     }
   };
 
@@ -84,11 +120,21 @@ export const UploadStatus: React.FC<UploadStatusProps> = ({ refreshInterval = 20
     return stateNames[state] || `Unknown (${state})`;
   };
 
-  // Always show if there are any attachments or if loading
-  if (allAttachments.length === 0 && !loading) {
-    return null;
-  }
+  // Memoize indicator style to prevent flickering
+  const indicatorStyle = useMemo(() => {
+    return pendingAttachments.length > 0 
+      ? [styles.indicator, styles.indicatorPending]
+      : styles.indicator;
+  }, [pendingAttachments.length]);
 
+  // Memoize header text to prevent flickering
+  const headerText = useMemo(() => {
+    return pendingAttachments.length === 0
+      ? 'No pending uploads'
+      : `${pendingAttachments.length} pending upload${pendingAttachments.length !== 1 ? 's' : ''}`;
+  }, [pendingAttachments.length]);
+
+  // Always render to prevent layout shifts - never return null
   return (
     <View style={styles.container}>
       <TouchableOpacity
@@ -98,15 +144,13 @@ export const UploadStatus: React.FC<UploadStatusProps> = ({ refreshInterval = 20
       >
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
-            {loading ? (
+            {loading && !hasLoadedOnce ? (
               <ActivityIndicator size="small" color="#ff9500" style={styles.loader} />
             ) : (
-              <View style={[styles.indicator, pendingAttachments.length > 0 && styles.indicatorPending]} />
+              <View style={indicatorStyle} />
             )}
             <Text style={styles.headerText}>
-              {pendingAttachments.length === 0
-                ? 'No pending uploads'
-                : `${pendingAttachments.length} pending upload${pendingAttachments.length !== 1 ? 's' : ''}`}
+              {headerText}
             </Text>
           </View>
           {pendingAttachments.length > 0 && (

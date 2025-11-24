@@ -1,18 +1,23 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery as useReactQuery } from '@tanstack/react-query';
 import { useQuery } from '@powersync/react';
 import { PointCard } from '../../../../components/PointCard';
 import { SearchBar } from '../../../../components/SearchBar';
 import { FilterPanel } from '../../../../components/FilterPanel';
 import { lookupService } from '../../../../services/lookups';
+import { retoolUserService } from '../../../../services/retoolUser';
 import { buildPointsQuery } from '../../../../lib/powersync-queries';
 import type { Point, Gateway, PointIotStatus } from '../../../../types/database';
 
 export default function PointListScreen() {
   const { assetId } = useLocalSearchParams<{ assetId: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = Platform.OS === 'ios' ? 49 : Platform.OS === 'android' ? 56 : 64;
+  const fabBottom = 20 + tabBarHeight + (Platform.OS !== 'web' ? insets.bottom : 0);
   const [searchText, setSearchText] = useState('');
   const [debouncedSearchText, setDebouncedSearchText] = useState('');
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(true);
@@ -36,11 +41,18 @@ export default function PointListScreen() {
     queryFn: () => lookupService.getPointIotStatuses(),
   });
 
+  // Get default site ID for current user
+  const { data: defaultSiteId } = useReactQuery<string | null>({
+    queryKey: ['defaultSiteId'],
+    queryFn: () => retoolUserService.getDefaultSiteId(),
+  });
+
   const { sql, params } = useMemo(() => buildPointsQuery(assetId!, {
     search: debouncedSearchText || undefined,
     gatewayId: selectedGatewayId,
     iotStatusId: selectedIotStatusId,
-  }), [assetId, debouncedSearchText, selectedGatewayId, selectedIotStatusId]);
+    defaultSiteId: defaultSiteId,
+  }), [assetId, debouncedSearchText, selectedGatewayId, selectedIotStatusId, defaultSiteId]);
 
   const { data: points = [], isLoading } = useQuery<Point>(sql, params);
 
@@ -92,6 +104,7 @@ export default function PointListScreen() {
       <FlatList
         data={points}
         keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingBottom: fabBottom + 20 }}
         renderItem={({ item }) => (
           <PointCard
             point={item}
@@ -106,7 +119,7 @@ export default function PointListScreen() {
       />
 
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { bottom: fabBottom }]}
         onPress={() => router.push(`/machines/points/new?assetId=${assetId}`)}
       >
         <Text style={styles.fabText}>+</Text>
@@ -136,7 +149,6 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 20,
-    bottom: 20,
     width: 56,
     height: 56,
     borderRadius: 28,

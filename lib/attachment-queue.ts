@@ -98,6 +98,9 @@ export class AttachmentQueue extends AbstractAttachmentQueue {
    */
   private async generateThumbnailForAttachment(record: AttachmentRecord): Promise<void> {
     try {
+      if (!record.local_uri) {
+        return;
+      }
       const localUri = this.getLocalUri(record.local_uri);
       const storageAdapter = (this as any).storage;
       

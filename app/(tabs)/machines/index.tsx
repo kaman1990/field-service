@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, TextInput, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery as useReactQuery, useQueryClient } from '@tanstack/react-query';
 import { useQuery } from '@powersync/react';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +13,7 @@ import { CameraScreen } from '../../../components/CameraScreen';
 import { lookupService } from '../../../services/lookups';
 import { assetService } from '../../../services/assets';
 import { imageService } from '../../../services/images';
+import { retoolUserService } from '../../../services/retoolUser';
 import { buildAssetsQuery } from '../../../lib/powersync-queries';
 import { getPowerSync } from '../../../lib/powersync';
 import { isNetworkError } from '../../../lib/error-utils';
@@ -20,6 +22,9 @@ import type { Asset, Area, AssetIotStatus, Gateway } from '../../../types/databa
 export default function AssetListScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = Platform.OS === 'ios' ? 49 : Platform.OS === 'android' ? 56 : 64;
+  const fabBottom = 20 + tabBarHeight + (Platform.OS !== 'web' ? insets.bottom : 0);
   const [searchText, setSearchText] = useState('');
   const [debouncedSearchText, setDebouncedSearchText] = useState('');
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(true);
@@ -104,33 +109,43 @@ export default function AssetListScreen() {
     queryFn: () => lookupService.getGateways(),
   });
 
+  // Get default site ID for current user
+  const { data: defaultSiteId } = useReactQuery<string | null>({
+    queryKey: ['defaultSiteId'],
+    queryFn: () => retoolUserService.getDefaultSiteId(),
+  });
+
   const { sql, params } = useMemo(() => buildAssetsQuery({
     search: debouncedSearchText || undefined,
     areaId: selectedAreaId,
     iotStatusId: selectedIotStatusId,
     gatewayId: selectedGatewayId,
-  }), [debouncedSearchText, selectedAreaId, selectedIotStatusId, selectedGatewayId]);
+    defaultSiteId: defaultSiteId,
+  }), [debouncedSearchText, selectedAreaId, selectedIotStatusId, selectedGatewayId, defaultSiteId]);
 
   // Query for counting assets by IoT status (without IoT status filter, but respects other filters)
   const { sql: countSql, params: countParams } = useMemo(() => buildAssetsQuery({
     search: debouncedSearchText || undefined,
     areaId: selectedAreaId,
     gatewayId: selectedGatewayId,
-  }), [debouncedSearchText, selectedAreaId, selectedGatewayId]);
+    defaultSiteId: defaultSiteId,
+  }), [debouncedSearchText, selectedAreaId, selectedGatewayId, defaultSiteId]);
 
   // Query for counting assets by area (without area filter)
   const { sql: areaCountSql, params: areaCountParams } = useMemo(() => buildAssetsQuery({
     search: debouncedSearchText || undefined,
     iotStatusId: selectedIotStatusId,
     gatewayId: selectedGatewayId,
-  }), [debouncedSearchText, selectedIotStatusId, selectedGatewayId]);
+    defaultSiteId: defaultSiteId,
+  }), [debouncedSearchText, selectedIotStatusId, selectedGatewayId, defaultSiteId]);
 
   // Query for counting assets by gateway (without gateway filter)
   const { sql: gatewayCountSql, params: gatewayCountParams } = useMemo(() => buildAssetsQuery({
     search: debouncedSearchText || undefined,
     areaId: selectedAreaId,
     iotStatusId: selectedIotStatusId,
-  }), [debouncedSearchText, selectedAreaId, selectedIotStatusId]);
+    defaultSiteId: defaultSiteId,
+  }), [debouncedSearchText, selectedAreaId, selectedIotStatusId, defaultSiteId]);
 
   const { data: assets = [], isLoading } = useQuery<Asset>(sql, params);
   const { data: allFilteredAssets = [] } = useQuery<Asset>(countSql, countParams);
@@ -392,6 +407,7 @@ export default function AssetListScreen() {
       <FlatList
         data={assets}
         keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingBottom: fabBottom + 20 }}
         renderItem={({ item }) => {
           const areaName = item.area_id ? areaMap.get(item.area_id) : undefined;
           const iotStatus = item.iot_status_id ? iotStatusMap.get(item.iot_status_id) : undefined;
@@ -417,7 +433,7 @@ export default function AssetListScreen() {
       />
 
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { bottom: fabBottom }]}
         onPress={() => router.push('/machines/new')}
       >
         <Text style={styles.fabText}>+</Text>
@@ -669,7 +685,6 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 20,
-    bottom: 20,
     width: 56,
     height: 56,
     borderRadius: 28,

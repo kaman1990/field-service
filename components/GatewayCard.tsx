@@ -56,7 +56,7 @@ const getStatusColor = (status?: string, online?: boolean): string => {
   return '#999'; // Gray (unknown)
 };
 
-export const GatewayCard: React.FC<GatewayCardProps> = ({ gateway, areaName, status, iotStatus, onPress, onLongPress }) => {
+export const GatewayCard: React.FC<GatewayCardProps> = React.memo(({ gateway, areaName, status, iotStatus, onPress, onLongPress }) => {
   // Use IoT status if available, otherwise fall back to regular status or online status
   const primaryStatus = iotStatus || status || (gateway.online ? 'Online' : 'Offline');
   const primaryStatusColor = getStatusColor(iotStatus || status, gateway.online);
@@ -120,7 +120,7 @@ export const GatewayCard: React.FC<GatewayCardProps> = ({ gateway, areaName, sta
       </View>
     </TouchableOpacity>
   );
-};
+});
 
 const styles = StyleSheet.create({
   card: {

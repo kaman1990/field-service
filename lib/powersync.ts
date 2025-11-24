@@ -114,6 +114,8 @@ const assets = new Table({
   updated_at: column.text,
   created_by: column.text,
   updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 }, {
   indexes: {
     site: ['site_id'],
@@ -167,6 +169,8 @@ const points = new Table({
   updated_at: column.text,
   created_by: column.text,
   updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 }, {
   indexes: {
     asset: ['asset_id'],
@@ -207,6 +211,8 @@ const gateways = new Table({
   updated_at: column.text,
   created_by: column.text,
   updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 }, {
   indexes: {
     site: ['site_id'],
@@ -220,7 +226,6 @@ const sites = new Table({
   name: column.text,
   description: column.text,
   location: column.text,
-  company: column.text,
   company_id: column.text,
   survey_engineers: column.text,
   survey_date: column.text,
@@ -231,6 +236,8 @@ const sites = new Table({
   updated_at: column.text,
   created_by: column.text,
   updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 });
 
 const areas = new Table({
@@ -245,6 +252,8 @@ const areas = new Table({
   updated_at: column.text,
   created_by: column.text,
   updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 }, {
   indexes: {
     site: ['site_id'],
@@ -259,6 +268,8 @@ const asset_health_status = new Table({
   updated_at: column.text,
   created_by: column.text,
   updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 });
 
 const asset_iot_status = new Table({
@@ -270,6 +281,8 @@ const asset_iot_status = new Table({
   updated_at: column.text,
   created_by: column.text,
   updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 });
 
 const point_iot_status = new Table({
@@ -281,6 +294,8 @@ const point_iot_status = new Table({
   updated_at: column.text,
   created_by: column.text,
   updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 });
 
 const asset_types = new Table({
@@ -290,6 +305,8 @@ const asset_types = new Table({
   updated_at: column.text,
   created_by: column.text,
   updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 });
 
 const gateway_status = new Table({
@@ -299,6 +316,8 @@ const gateway_status = new Table({
   updated_at: column.text,
   created_by: column.text,
   updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 });
 
 const gateway_iot_status = new Table({
@@ -310,6 +329,8 @@ const gateway_iot_status = new Table({
   updated_at: column.text,
   created_by: column.text,
   updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 });
 
 const images = new Table({
@@ -326,6 +347,8 @@ const images = new Table({
   updated_at: column.text,
   created_by: column.text,
   updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 }, {
   indexes: {
     asset: ['asset_id'],
@@ -343,6 +366,8 @@ const asset_additional_details = new Table({
   updated_at: column.text,
   created_by: column.text,
   updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 }, {
   indexes: {
     asset: ['asset_id'],
@@ -358,6 +383,8 @@ const asset_history = new Table({
   updated_at: column.text,
   created_by: column.text,
   updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 }, {
   indexes: {
     asset: ['asset_id'],
@@ -379,10 +406,40 @@ const retool_users = new Table({
   created_by: column.text,
   updated_by: column.text,
   auth_id: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 }, {
   indexes: {
     auth_id: ['auth_id'],
   }
+});
+
+const user_sites = new Table({
+  user_id: column.text,
+  site_id: column.text,
+  enabled: column.integer,
+  created_at: column.text,
+  updated_at: column.text,
+  created_by: column.text,
+  updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
+}, {
+  indexes: {
+    user_id: ['user_id'],
+    site_id: ['site_id'],
+  }
+});
+
+const company = new Table({
+  name: column.text,
+  enabled: column.integer,
+  created_at: column.text,
+  updated_at: column.text,
+  created_by: column.text,
+  updated_by: column.text,
+  deleted_at: column.text,
+  deleted_by: column.text,
 });
 
 // Create attachments table if AttachmentTable is available
@@ -407,6 +464,8 @@ const AppSchema = new Schema({
   asset_additional_details,
   asset_history,
   retool_users,
+  user_sites,
+  company,
   ...(attachments ? { attachments } : {}),
 });
 

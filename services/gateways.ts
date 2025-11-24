@@ -1,4 +1,5 @@
 import { getInitializedPowerSync } from '../lib/powersync';
+import { retoolUserService } from './retoolUser';
 import type { Gateway, Point } from '../types/database';
 
 export const gatewayService = {
@@ -9,8 +10,18 @@ export const gatewayService = {
     connectionType?: string;
   }): Promise<Gateway[]> {
     const powerSync = await getInitializedPowerSync();
+    
+    // Get default site ID for current user
+    const defaultSiteId = await retoolUserService.getDefaultSiteId();
+    
     let sql = 'SELECT * FROM gateways WHERE enabled = ?';
     const params: any[] = [true];
+    
+    // Filter by default site if not admin
+    if (defaultSiteId !== null) {
+      sql += ' AND site_id = ?';
+      params.push(defaultSiteId);
+    }
     
     if (filters?.search) {
       const searchTerm = `%${filters.search}%`;
@@ -99,6 +110,7 @@ export const gatewayService = {
   },
 
   async updateGateway(id: string, gateway: Partial<Gateway>): Promise<Gateway> {
+    // Handle errors at the beginning
     const powerSync = await getInitializedPowerSync();
     if (!powerSync || !powerSync.execute) {
       throw new Error('PowerSync is not initialized. Please ensure the app is connected.');
@@ -157,8 +169,8 @@ export const gatewayService = {
       }
     }
     
+    // Early return if no updates
     if (updates.length === 0) {
-      // No updates to make, just return the current gateway
       const result = await powerSync.get<Gateway>(
         'SELECT * FROM gateways WHERE id = ?',
         [id]

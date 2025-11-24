@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, TextInput, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery as useReactQuery, useQueryClient } from '@tanstack/react-query';
 import { useQuery } from '@powersync/react';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +10,7 @@ import { SearchBar } from '../../../components/SearchBar';
 import { FilterPanel } from '../../../components/FilterPanel';
 import { lookupService } from '../../../services/lookups';
 import { gatewayService } from '../../../services/gateways';
+import { retoolUserService } from '../../../services/retoolUser';
 import { buildGatewaysQuery } from '../../../lib/powersync-queries';
 import { getPowerSync } from '../../../lib/powersync';
 import type { Gateway, Area, GatewayStatus, GatewayIotStatus } from '../../../types/database';
@@ -16,6 +18,9 @@ import type { Gateway, Area, GatewayStatus, GatewayIotStatus } from '../../../ty
 export default function GatewayListScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = Platform.OS === 'ios' ? 49 : Platform.OS === 'android' ? 56 : 64;
+  const fabBottom = 20 + tabBarHeight + (Platform.OS !== 'web' ? insets.bottom : 0);
   const [searchText, setSearchText] = useState('');
   const [debouncedSearchText, setDebouncedSearchText] = useState('');
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(true);
@@ -118,6 +123,12 @@ export default function GatewayListScreen() {
     return status?.id || null;
   }, [gatewayIotStatuses]);
 
+  // Get default site ID for current user
+  const { data: defaultSiteId } = useReactQuery<string | null>({
+    queryKey: ['defaultSiteId'],
+    queryFn: () => retoolUserService.getDefaultSiteId(),
+  });
+
   const { sql, params } = useMemo(() => {
     try {
       return buildGatewaysQuery({
@@ -126,12 +137,13 @@ export default function GatewayListScreen() {
         statusId: selectedStatusId,
         iotStatusId: selectedIotStatusId,
         connectionType: selectedConnectionType,
+        defaultSiteId: defaultSiteId,
       });
     } catch (error) {
       // Error building query
       return { sql: '', params: [] };
     }
-  }, [debouncedSearchText, selectedAreaId, selectedStatusId, selectedIotStatusId, selectedConnectionType]);
+  }, [debouncedSearchText, selectedAreaId, selectedStatusId, selectedIotStatusId, selectedConnectionType, defaultSiteId]);
 
   // Query for counting gateways by status (without status filter)
   const { sql: countSql, params: countParams } = useMemo(() => buildGatewaysQuery({
@@ -139,7 +151,8 @@ export default function GatewayListScreen() {
     areaId: selectedAreaId,
     statusId: selectedStatusId,
     connectionType: selectedConnectionType,
-  }), [debouncedSearchText, selectedAreaId, selectedStatusId, selectedConnectionType]);
+    defaultSiteId: defaultSiteId,
+  }), [debouncedSearchText, selectedAreaId, selectedStatusId, selectedConnectionType, defaultSiteId]);
 
   // Query for counting gateways by IoT status (without IoT status filter, but respects other filters)
   const { sql: iotCountSql, params: iotCountParams } = useMemo(() => buildGatewaysQuery({
@@ -147,7 +160,8 @@ export default function GatewayListScreen() {
     areaId: selectedAreaId,
     statusId: selectedStatusId,
     connectionType: selectedConnectionType,
-  }), [debouncedSearchText, selectedAreaId, selectedStatusId, selectedConnectionType]);
+    defaultSiteId: defaultSiteId,
+  }), [debouncedSearchText, selectedAreaId, selectedStatusId, selectedConnectionType, defaultSiteId]);
 
   const { data: gateways = [], isLoading } = useQuery<Gateway>(sql || 'SELECT * FROM gateways WHERE 1=0', params);
   const { data: allFilteredGateways = [] } = useQuery<Gateway>(countSql || 'SELECT * FROM gateways WHERE 1=0', countParams);
@@ -435,6 +449,7 @@ export default function GatewayListScreen() {
       <FlatList
         data={gateways}
         keyExtractor={(item) => item.id}
+        contentContainerStyle={{ paddingBottom: fabBottom + 20 }}
         renderItem={({ item }) => {
           const areaName = item.area_id ? areaMap.get(item.area_id) : undefined;
           const status = item.status_id ? statusMap.get(item.status_id) : undefined;
@@ -459,7 +474,7 @@ export default function GatewayListScreen() {
       />
 
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { bottom: fabBottom }]}
         onPress={() => router.push('/gateways/new')}
       >
         <Text style={styles.fabText}>+</Text>
@@ -657,7 +672,6 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 20,
-    bottom: 20,
     width: 56,
     height: 56,
     borderRadius: 28,

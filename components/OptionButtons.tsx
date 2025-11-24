@@ -26,6 +26,10 @@ export const OptionButtons: React.FC<OptionButtonsProps> = ({
             key={option.value}
             style={[styles.button, isSelected && styles.buttonSelected]}
             onPress={() => onValueChange(option.value)}
+            accessibilityRole="button"
+            accessibilityLabel={option.label}
+            accessibilityHint={isSelected ? "Currently selected" : "Selects this option"}
+            accessibilityState={{ selected: isSelected }}
           >
             <Text style={[styles.buttonText, isSelected && styles.buttonTextSelected]}>
               {option.label}

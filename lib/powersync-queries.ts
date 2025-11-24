@@ -58,10 +58,17 @@ export function buildAssetsQuery(filters?: {
   type?: string;
   iotStatusId?: string;
   gatewayId?: string;
+  defaultSiteId?: string | null;
 }): { sql: string; params: QueryParam[] } {
   const tableName = getTableName('assets');
   let sql = `SELECT * FROM ${tableName} WHERE enabled = ?`;
   const params: QueryParam[] = [true];
+  
+  // Filter by default site if provided (null means admin - all sites accessible)
+  if (filters?.defaultSiteId !== null && filters?.defaultSiteId !== undefined) {
+    sql += ' AND site_id = ?';
+    params.push(filters.defaultSiteId);
+  }
   
   if (filters?.search) {
     const searchTerm = `%${filters.search}%`;
@@ -103,10 +110,17 @@ export function buildGatewaysQuery(filters?: {
   statusId?: string;
   iotStatusId?: string;
   connectionType?: string;
+  defaultSiteId?: string | null;
 }): { sql: string; params: QueryParam[] } {
   const tableName = getTableName('gateways');
   let sql = `SELECT * FROM ${tableName} WHERE enabled = ?`;
   const params: QueryParam[] = [true];
+  
+  // Filter by default site if provided (null means admin - all sites accessible)
+  if (filters?.defaultSiteId !== null && filters?.defaultSiteId !== undefined) {
+    sql += ' AND site_id = ?';
+    params.push(filters.defaultSiteId);
+  }
   
   if (filters?.search) {
     const searchTerm = `%${filters.search}%`;
@@ -146,10 +160,18 @@ export function buildPointsQuery(assetId: string, filters?: {
   search?: string;
   gatewayId?: string;
   iotStatusId?: string;
+  defaultSiteId?: string | null;
 }): { sql: string; params: QueryParam[] } {
   const tableName = getTableName('points');
   let sql = `SELECT * FROM ${tableName} WHERE asset_id = ? AND enabled = ?`;
   const params: QueryParam[] = [assetId, true];
+  
+  // Filter by default site if provided (null means admin - all sites accessible)
+  // Note: Points are filtered indirectly through their assets, but we can add direct filtering if needed
+  if (filters?.defaultSiteId !== null && filters?.defaultSiteId !== undefined) {
+    sql += ' AND site_id = ?';
+    params.push(filters.defaultSiteId);
+  }
   
   if (filters?.search) {
     const searchTerm = `%${filters.search}%`;

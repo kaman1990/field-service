@@ -1,4 +1,5 @@
 import { getInitializedPowerSync } from '../lib/powersync';
+import { retoolUserService } from './retoolUser';
 import type { Asset, AssetAdditionalDetail, AssetHistory } from '../types/database';
 
 export const assetService = {
@@ -10,8 +11,18 @@ export const assetService = {
     gatewayId?: string;
   }): Promise<Asset[]> {
     const powerSync = await getInitializedPowerSync();
+    
+    // Get default site ID for current user
+    const defaultSiteId = await retoolUserService.getDefaultSiteId();
+    
     let sql = 'SELECT * FROM assets WHERE enabled = ?';
     const params: any[] = [true];
+    
+    // Filter by default site if not admin
+    if (defaultSiteId !== null) {
+      sql += ' AND site_id = ?';
+      params.push(defaultSiteId);
+    }
     
     if (filters?.search) {
       const searchTerm = `%${filters.search}%`;
@@ -90,6 +101,7 @@ export const assetService = {
   },
 
   async updateAsset(id: string, asset: Partial<Asset>): Promise<Asset> {
+    // Handle errors at the beginning
     const powerSync = await getInitializedPowerSync();
     if (!powerSync || !powerSync.execute) {
       throw new Error('PowerSync is not initialized. Please ensure the app is connected.');
@@ -164,8 +176,8 @@ export const assetService = {
       }
     }
     
+    // Early return if no updates
     if (updates.length === 0) {
-      // No updates to make, just return the current asset
       const result = await powerSync.get<Asset>(
         'SELECT * FROM assets WHERE id = ?',
         [id]

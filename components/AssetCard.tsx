@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useTheme } from '../lib/theme';
 import type { Asset } from '../types/database';
 
 interface AssetCardProps {
@@ -45,41 +46,107 @@ const getStatusColor = (status?: string): string => {
   return '#2196F3'; // Blue (default)
 };
 
-export const AssetCard: React.FC<AssetCardProps> = ({ asset, areaName, iotStatus, gatewayName, onPress, onLongPress }) => {
+export const AssetCard: React.FC<AssetCardProps> = React.memo(({ asset, areaName, iotStatus, gatewayName, onPress, onLongPress }) => {
+  const { colors } = useTheme();
   const statusColor = getStatusColor(iotStatus);
 
+  const dynamicStyles = StyleSheet.create({
+    card: {
+      backgroundColor: colors.cardBackground,
+      padding: 12,
+      marginVertical: 6,
+      marginHorizontal: 16,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+      elevation: 2,
+    },
+    name: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    internalId: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      fontWeight: '500',
+      marginTop: 1,
+    },
+    description: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginBottom: 6,
+      lineHeight: 18,
+    },
+    badge: {
+      backgroundColor: colors.isDark ? '#1a3a5c' : '#e3f2fd',
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 4,
+      marginRight: 6,
+    },
+    badgeText: {
+      fontSize: 11,
+      color: colors.isDark ? '#64b5f6' : '#1976d2',
+      fontWeight: '500',
+    },
+    badgeTextUnmapped: {
+      color: colors.textSecondary,
+    },
+    serialNo: {
+      fontSize: 11,
+      color: colors.textSecondary,
+    },
+    metaLabel: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      marginBottom: 2,
+      fontWeight: '500',
+    },
+    metaValue: {
+      fontSize: 12,
+      color: colors.text,
+      fontWeight: '600',
+      textAlign: 'right',
+    },
+  });
+
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} onLongPress={onLongPress}>
+    <TouchableOpacity style={dynamicStyles.card} onPress={onPress} onLongPress={onLongPress}>
       <View style={styles.content}>
         <View style={styles.leftSection}>
           <View style={styles.headerLeft}>
             <View style={[styles.statusIcon, { backgroundColor: statusColor }]} />
             <View style={styles.titleContainer}>
-              <Text style={styles.name}>{asset.name}</Text>
+              <Text style={dynamicStyles.name}>{asset.name}</Text>
               {asset.internal_id ? (
-                <Text style={styles.internalId}>{asset.internal_id}</Text>
+                <Text style={dynamicStyles.internalId}>{asset.internal_id}</Text>
               ) : null}
             </View>
           </View>
           
           {asset.description ? (
-            <Text style={styles.description} numberOfLines={2}>
+            <Text style={dynamicStyles.description} numberOfLines={2}>
               {asset.description}
             </Text>
           ) : null}
           
           <View style={styles.footer}>
             {gatewayName ? (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>Gateway: {gatewayName}</Text>
+              <View style={dynamicStyles.badge}>
+                <Text style={dynamicStyles.badgeText}>Gateway: {gatewayName}</Text>
               </View>
             ) : (
-              <View style={styles.badge}>
-                <Text style={[styles.badgeText, styles.badgeTextUnmapped]}>Gateway: Not Mapped</Text>
+              <View style={dynamicStyles.badge}>
+                <Text style={[dynamicStyles.badgeText, dynamicStyles.badgeTextUnmapped]}>Gateway: Not Mapped</Text>
               </View>
             )}
             {asset.serial_no ? (
-              <Text style={styles.serialNo}>SN: {asset.serial_no}</Text>
+              <Text style={dynamicStyles.serialNo}>SN: {asset.serial_no}</Text>
             ) : null}
           </View>
         </View>
@@ -87,8 +154,8 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, areaName, iotStatus
         <View style={styles.rightSection}>
           {areaName ? (
             <View style={styles.metaItem}>
-              <Text style={styles.metaLabel}>Area</Text>
-              <Text style={styles.metaValue}>{areaName}</Text>
+              <Text style={dynamicStyles.metaLabel}>Area</Text>
+              <Text style={dynamicStyles.metaValue}>{areaName}</Text>
             </View>
           ) : null}
           {iotStatus ? (
@@ -96,7 +163,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, areaName, iotStatus
               
               <View style={styles.statusRow}>
                 <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                <Text style={[styles.metaValue, { color: statusColor }]}>{iotStatus}</Text>
+                <Text style={[dynamicStyles.metaValue, { color: statusColor }]}>{iotStatus}</Text>
               </View>
             </View>
           ) : null}
@@ -104,7 +171,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, areaName, iotStatus
       </View>
     </TouchableOpacity>
   );
-};
+});
 
 const styles = StyleSheet.create({
   card: {

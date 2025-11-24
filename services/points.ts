@@ -105,6 +105,7 @@ export const pointService = {
   },
 
   async updatePoint(id: string, point: Partial<Point>): Promise<Point> {
+    // Handle errors at the beginning
     const powerSync = await getInitializedPowerSync();
     if (!powerSync || !powerSync.execute) {
       throw new Error('PowerSync is not initialized. Please ensure the app is connected.');
@@ -175,8 +176,8 @@ export const pointService = {
       }
     }
     
+    // Early return if no updates
     if (updates.length === 0) {
-      // No updates to make, just return the current point
       const result = await powerSync.get<Point>(
         'SELECT * FROM points WHERE id = ?',
         [id]

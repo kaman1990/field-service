@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabase';
 import { retoolUserService } from '../../../services/retoolUser';
 import { lookupService } from '../../../services/lookups';
@@ -11,6 +13,10 @@ import type { Site, RetoolUser } from '../../../types/database';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = Platform.OS === 'ios' ? 49 : Platform.OS === 'android' ? 56 : 64;
+  const bottomPadding = tabBarHeight + (Platform.OS !== 'web' ? insets.bottom : 0) + 16;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [retoolUser, setRetoolUser] = useState<RetoolUser | null>(null);
@@ -18,7 +24,7 @@ export default function SettingsScreen() {
   const [authId, setAuthId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [refreshingSync, setRefreshingSync] = useState(false);
+  const hasLoadedSyncStatus = useRef(false);
 
   useEffect(() => {
     loadData();
@@ -44,12 +50,21 @@ export default function SettingsScreen() {
       const userId = session.user.id;
       setAuthId(userId);
 
-      const [sitesData, userData] = await Promise.all([
+      const [sitesData, userData, accessibleSiteIds] = await Promise.all([
         lookupService.getSites(),
         retoolUserService.getRetoolUserByAuthId(userId),
+        retoolUserService.getAccessibleSiteIds(),
       ]);
 
-      setSites(sitesData);
+      // Filter sites to only show those the user is assigned to (for non-admins)
+      // Admins see all sites, regular users only see their assigned sites
+      if (userData?.is_admin) {
+        setSites(sitesData);
+      } else {
+        // Filter to only show sites the user is assigned to
+        const assignedSiteIds = accessibleSiteIds || [];
+        setSites(sitesData.filter(site => assignedSiteIds.includes(site.id)));
+      }
       setRetoolUser(userData);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to load settings');
@@ -68,6 +83,9 @@ export default function SettingsScreen() {
       setSaving(true);
       const updated = await retoolUserService.updateDefaultSiteId(authId, siteId);
       setRetoolUser(updated);
+      
+      // Invalidate defaultSiteId cache to refresh data in other screens
+      await queryClient.invalidateQueries({ queryKey: ['defaultSiteId'] });
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update default site');
     } finally {
@@ -77,13 +95,29 @@ export default function SettingsScreen() {
 
   const loadSyncStatus = async () => {
     try {
-      setRefreshingSync(true);
       const status = await syncService.getSyncStatus();
-      setSyncStatus(status);
+      // Only update if status actually changed to prevent unnecessary re-renders
+      setSyncStatus(prevStatus => {
+        if (!prevStatus) {
+          hasLoadedSyncStatus.current = true;
+          return status;
+        }
+        // Compare all fields to see if anything changed
+        if (
+          prevStatus.pendingUploads !== status.pendingUploads ||
+          prevStatus.pendingDownloads !== status.pendingDownloads ||
+          prevStatus.pendingSync !== status.pendingSync ||
+          prevStatus.synced !== status.synced ||
+          prevStatus.powerSyncQueueCount !== status.powerSyncQueueCount ||
+          prevStatus.powerSyncQueueSize !== status.powerSyncQueueSize
+        ) {
+          return status;
+        }
+        return prevStatus; // Return previous to prevent re-render
+      });
+      hasLoadedSyncStatus.current = true;
     } catch (error: any) {
-      // Error loading sync status - silently fail
-    } finally {
-      setRefreshingSync(false);
+      // Error loading sync status - silently fail, keep previous status
     }
   };
 
@@ -179,7 +213,7 @@ export default function SettingsScreen() {
   return (
     <ScrollView 
       style={styles.container}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPadding }]}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={true}
     >
@@ -205,12 +239,28 @@ export default function SettingsScreen() {
         )}
       </View>
 
+      {retoolUser?.is_admin && (
+        <>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push('/settings/sites')}
+          >
+            <Text style={styles.menuItemText}>🏢 Sites Management</Text>
+            <Text style={styles.menuItemArrow}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push('/settings/user-sites')}
+          >
+            <Text style={styles.menuItemText}>👥 User Management</Text>
+            <Text style={styles.menuItemArrow}>›</Text>
+          </TouchableOpacity>
+        </>
+      )}
+
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Sync Status</Text>
-          {refreshingSync && (
-            <ActivityIndicator size="small" color="#007AFF" style={styles.refreshIndicator} />
-          )}
         </View>
         <Text style={styles.sectionDescription}>
           Current status of pending uploads and downloads
@@ -219,43 +269,45 @@ export default function SettingsScreen() {
         {/* Upload Status Component - Shows detailed list of pending uploads */}
         <UploadStatus refreshInterval={2000} />
         
-        {syncStatus ? (
-          <View style={styles.syncStatusContainer}>
-            <View style={styles.syncStatusRow}>
-              <Text style={styles.syncStatusLabel}>Pending Uploads:</Text>
-              <Text style={[styles.syncStatusValue, syncStatus.pendingUploads > 0 && styles.syncStatusPending]}>
-                {syncStatus.pendingUploads}
-              </Text>
-            </View>
-            <View style={styles.syncStatusRow}>
-              <Text style={styles.syncStatusLabel}>Pending Downloads:</Text>
-              <Text style={[styles.syncStatusValue, syncStatus.pendingDownloads > 0 && styles.syncStatusPending]}>
-                {syncStatus.pendingDownloads}
-              </Text>
-            </View>
-            <View style={styles.syncStatusRow}>
-              <Text style={styles.syncStatusLabel}>Queued for Sync:</Text>
-              <Text style={[styles.syncStatusValue, syncStatus.pendingSync > 0 && styles.syncStatusPending]}>
-                {syncStatus.pendingSync}
-              </Text>
-            </View>
-            <View style={styles.syncStatusRow}>
-              <Text style={styles.syncStatusLabel}>Synced:</Text>
-              <Text style={styles.syncStatusValue}>{syncStatus.synced}</Text>
-            </View>
-            {syncStatus.powerSyncQueueCount > 0 && (
+        <View style={styles.syncStatusContainer}>
+          {syncStatus ? (
+            <>
               <View style={styles.syncStatusRow}>
-                <Text style={styles.syncStatusLabel}>PowerSync Queue:</Text>
-                <Text style={[styles.syncStatusValue, styles.syncStatusPending]}>
-                  {syncStatus.powerSyncQueueCount} items
-                  {syncStatus.powerSyncQueueSize && ` (${formatBytes(syncStatus.powerSyncQueueSize)})`}
+                <Text style={styles.syncStatusLabel}>Pending Uploads:</Text>
+                <Text style={[styles.syncStatusValue, syncStatus.pendingUploads > 0 && styles.syncStatusPending]}>
+                  {syncStatus.pendingUploads}
                 </Text>
               </View>
-            )}
-          </View>
-        ) : (
-          <Text style={styles.syncStatusLoading}>Loading sync status...</Text>
-        )}
+              <View style={styles.syncStatusRow}>
+                <Text style={styles.syncStatusLabel}>Pending Downloads:</Text>
+                <Text style={[styles.syncStatusValue, syncStatus.pendingDownloads > 0 && styles.syncStatusPending]}>
+                  {syncStatus.pendingDownloads}
+                </Text>
+              </View>
+              <View style={styles.syncStatusRow}>
+                <Text style={styles.syncStatusLabel}>Queued for Sync:</Text>
+                <Text style={[styles.syncStatusValue, syncStatus.pendingSync > 0 && styles.syncStatusPending]}>
+                  {syncStatus.pendingSync}
+                </Text>
+              </View>
+              <View style={styles.syncStatusRow}>
+                <Text style={styles.syncStatusLabel}>Synced:</Text>
+                <Text style={styles.syncStatusValue}>{syncStatus.synced}</Text>
+              </View>
+              {syncStatus.powerSyncQueueCount > 0 && (
+                <View style={styles.syncStatusRow}>
+                  <Text style={styles.syncStatusLabel}>PowerSync Queue:</Text>
+                  <Text style={[styles.syncStatusValue, styles.syncStatusPending]}>
+                    {syncStatus.powerSyncQueueCount} items
+                    {syncStatus.powerSyncQueueSize && ` (${formatBytes(syncStatus.powerSyncQueueSize)})`}
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : (
+            <Text style={styles.syncStatusLoading}>Loading sync status...</Text>
+          )}
+        </View>
 
         <TouchableOpacity
           style={[styles.syncButton, syncing && styles.syncButtonDisabled]}
@@ -299,7 +351,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 32,
   },
   center: {
     justifyContent: 'center',

@@ -3,11 +3,13 @@ import React, { useEffect, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { View, Text, ActivityIndicator } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { getPowerSync } from '../lib/powersync';
 import { connectPowerSync } from '../lib/powersync';
 import { PowerSyncStatus } from '../components/PowerSyncStatus';
 import { UpdateBanner } from '../components/UpdateBanner';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 // Import PowerSyncContext
 let PowerSyncContext: any;
@@ -126,16 +128,20 @@ export default function RootLayout() {
   }
 
   return (
-    <PowerSyncContext.Provider value={powerSync}>
-      <QueryClientProvider client={queryClient}>
-        <UpdateBanner />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="sign-in" />
-          <Stack.Screen name="(tabs)" />
-        </Stack>
-        {isAuthenticated && <PowerSyncStatus />}
-      </QueryClientProvider>
-    </PowerSyncContext.Provider>
+    <SafeAreaProvider>
+      <ErrorBoundary>
+        <PowerSyncContext.Provider value={powerSync}>
+          <QueryClientProvider client={queryClient}>
+            <UpdateBanner />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="sign-in" />
+              <Stack.Screen name="(tabs)" />
+            </Stack>
+            {isAuthenticated && <PowerSyncStatus />}
+          </QueryClientProvider>
+        </PowerSyncContext.Provider>
+      </ErrorBoundary>
+    </SafeAreaProvider>
   );
 }

@@ -14,6 +14,7 @@ import { isNetworkError } from '../../../lib/error-utils';
 import { pointService } from '../../../services/points';
 import { buildImagesQuery, buildPointsQuery, getTableName } from '../../../lib/powersync-queries';
 import { lookupService } from '../../../services/lookups';
+import { retoolUserService } from '../../../services/retoolUser';
 import type { Asset, Image as ImageType, Point, PointIotStatus, AssetIotStatus } from '../../../types/database';
 import { assetService } from '../../../services/assets';
 
@@ -75,6 +76,12 @@ export default function AssetDetailScreen() {
   const { data: assetIotStatuses = [] } = useReactQuery<AssetIotStatus[]>({
     queryKey: ['assetIotStatuses'],
     queryFn: () => lookupService.getAssetIotStatuses(),
+  });
+
+  // Get default site ID for current user
+  const { data: defaultSiteId } = useReactQuery<string | null>({
+    queryKey: ['defaultSiteId'],
+    queryFn: () => retoolUserService.getDefaultSiteId(),
   });
 
   const statusMap = useMemo(() => {
@@ -154,7 +161,10 @@ export default function AssetDetailScreen() {
     return status?.id || null;
   }, [assetIotStatuses]);
 
-  const { sql: pointsSql, params: pointsParams } = buildPointsQuery(assetId!);
+  const { sql: pointsSql, params: pointsParams } = useMemo(() => 
+    buildPointsQuery(assetId!, { defaultSiteId: defaultSiteId }), 
+    [assetId, defaultSiteId]
+  );
   const { data: pointsData = [] } = useQuery<Point>(pointsSql, pointsParams);
 
   // Query all point images for this asset

@@ -7,7 +7,7 @@ interface PointCardProps {
   onPress: () => void;
 }
 
-export const PointCard: React.FC<PointCardProps> = ({ point, onPress }) => {
+export const PointCard: React.FC<PointCardProps> = React.memo(({ point, onPress }) => {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress}>
       <View style={styles.header}>
@@ -33,7 +33,7 @@ export const PointCard: React.FC<PointCardProps> = ({ point, onPress }) => {
       </View>
     </TouchableOpacity>
   );
-};
+});
 
 const styles = StyleSheet.create({
   card: {
